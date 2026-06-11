@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dashboard Guru - RekapNilai TE</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: #f0f2f5;
+      min-height: 100vh;
+    }
+
+    /* NAVBAR */
+    .navbar {
+      background: #1a73e8;
+      color: white;
+      padding: 14px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .navbar h1 { font-size: 18px; }
+    .navbar .user-info { font-size: 13px; opacity: 0.9; }
+    .btn-logout {
+      background: rgba(255,255,255,0.2);
+      border: none;
+      color: white;
+      padding: 6px 14px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      margin-left: 12px;
+    }
+    .btn-logout:hover { background: rgba(255,255,255,0.3); }
+
+    /* MAIN */
+    .main { padding: 24px; max-width: 960px; margin: 0 auto; }
+
+    /* CARD */
+    .card {
+      background: white;
+      border-radius: 10px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+      padding: 20px 24px;
+      margin-bottom: 20px;
+    }
+    .card h2 {
+      font-size: 16px;
+      color: #333;
+      margin-bottom: 16px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid #eee;
+    }
+
+    /* FORM */
+    .form-row {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 12px;
+    }
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      flex: 1;
+      min-width: 160px;
+    }
+    label { font-size: 13px; color: #555; font-weight: 500; }
+    select, input[type="number"] {
+      padding: 9px 12px;
+      border: 1px solid #ddd;
+      border-radius: 7px;
+      font-size: 14px;
+      outline: none;
+      transition: border 0.2s;
+    }
+    select:focus, input[type="number"]:focus { border-color: #1a73e8; }
+
+    /* TABEL */
+    .tabel-wrapper { overflow-x: auto; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+    th {
+      background: #f8f9fa;
+      padding: 10px 12px;
+      text-align: left;
+      font-weight: 600;
+      color: #555;
+      border-bottom: 2px solid #eee;
+    }
+    td {
+      padding: 10px 12px;
+      border-bottom: 1px solid #f0f0f0;
+      color: #333;
+    }
+    tr:hover td { background: #fafafa; }
+
+    input.nilai-input {
+      width: 70px;
+      padding: 6px 8px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 13px;
+      text-align: center;
+    }
+    input.nilai-input:focus { border-color: #1a73e8; outline: none; }
+
+    /* BADGE STATUS */
+    .badge {
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+    .badge-sudah { background: #e6f4ea; color: #34a853; }
+    .badge-belum { background: #fce8e6; color: #d93025; }
+
+    /* TOMBOL */
+    .btn-primary {
+      background: #1a73e8;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 7px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .btn-primary:hover { background: #1557b0; }
+
+    .btn-success {
+      background: #34a853;
+      color: white;
+      border: none;
+      padding: 6px 14px;
+      border-radius: 6px;
+      font-size: 13px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .btn-success:hover { background: #2d9248; }
+
+    /* BOBOT */
+    .bobot-row {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      align-items: flex-end;
+    }
+    .bobot-info {
+      font-size: 12px;
+      color: #888;
+      margin-top: 6px;
+    }
+
+    /* NOTIFIKASI */
+    .notif {
+      padding: 10px 16px;
+      border-radius: 7px;
+      font-size: 13px;
+      margin-bottom: 16px;
+      display: none;
+    }
+    .notif-sukses { background: #e6f4ea; color: #34a853; }
+    .notif-error  { background: #fce8e6; color: #d93025; }
+
+    .loading-text {
+      color: #888;
+      font-size: 13px;
+      padding: 20px 0;
+      text-align: center;
+    }
+
+    .info-mapel {
+      font-size: 13px;
+      color: #1a73e8;
+      font-weight: 500;
+      margin-bottom: 4px;
+    }
+    .info-guru {
+      font-size: 12px;
+      color: #888;
+    }
+  </style>
+</head>
+<body>
+
+<!-- NAVBAR -->
+<div class="navbar">
+  <h1>📊 RekapNilai TE</h1>
+  <div style="display:flex; align-items:center; gap:8px;">
+    <span class="user-info" id="namaGuru">Memuat...</span>
+    <button class="btn-logout" onclick="logout()">Keluar</button>
+  </div>
+</div>
+
+<div class="main">
+
+  <!-- NOTIFIKASI -->
+  <div class="notif" id="notif"></div>
+
+  <!-- INFO MAPEL -->
+  <div class="card">
+    <p class="info-mapel" id="infoMapel">Memuat data mapel...</p>
+    <p class="info-guru" id="infoBobot"></p>
+  </div>
+
+  <!-- FILTER KELAS -->
+  <div class="card">
+    <h2>📋 Pilih Kelas</h2>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Kelas</label>
+        <select id="selectKelas" onchange="loadSiswa()">
+          <option value="">-- Pilih Kelas --</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <!-- TABEL NILAI -->
+  <div class="card" id="cardNilai" style="display:none;">
+    <h2>✏️ Input Nilai</h2>
+    <div class="tabel-wrapper">
+      <table>
+        <thead>
+          <tr>
+            <th>No</th>
+            <th>NIS</th>
+            <th>Nama</th>
+            <th>Harian</th>
+            <th>Praktik</th>
+            <th>Project</th>
+            <th>Nilai Akhir</th>
+            <th>Status</th>
+            <th>Aksi</th>
+          </tr>
+        </thead>
+        <tbody id="tabelSiswa">
+          <tr><td colspan="9" class="loading-text">Pilih kelas terlebih dahulu</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- SETTING BOBOT -->
+  <div class="card">
+    <h2>⚙️ Setting Bobot Nilai</h2>
+    <div class="bobot-row">
+      <div class="form-group">
+        <label>Bobot Harian (%)</label>
+        <input type="number" id="bobotHarian" min="0" max="100" value="40">
+      </div>
+      <div class="form-group">
+        <label>Bobot Praktik (%)</label>
+        <input type="number" id="bobotPraktik" min="0" max="100" value="40">
+      </div>
+      <div class="form-group">
+        <label>Bobot Project (%)</label>
+        <input type="number" id="bobotProject" min="0" max="100" value="20">
+      </div>
+      <div class="form-group" style="justify-content:flex-end;">
+        <button class="btn-primary" onclick="simpanBobot()">Simpan Bobot</button>
+      </div>
+    </div>
+    <p class="bobot-info">Total bobot harus = 100%</p>
+  </div>
+
+</div>
+
+<script>
+  let guruData  = null;
+  let mapelData = null;
+  let siswaList = [];
+
+  // ── Init ──────────────────────────────────────────
+  window.onload = function() {
+    google.script.run
+      .withSuccessHandler(function(guru) {
+        if (!guru) {
+          google.script.run
+            .withSuccessHandler(url => window.top.location.href = url)
+            .getScriptUrl();
+          return;
+        }
+        guruData = guru;
+        document.getElementById('namaGuru').textContent = guru.nama;
+        loadMapelGuru();
+        loadKelas();
+      })
+      .getUserInfo();
+  };
+
+  function loadMapelGuru() {
+    google.script.run
+      .withSuccessHandler(function(mapel) {
+        if (!mapel) {
+          document.getElementById('infoMapel').textContent = 'Mapel belum dikonfigurasi.';
+          return;
+        }
+        mapelData = mapel;
+        document.getElementById('infoMapel').textContent =
+          '📚 Mapel: ' + mapel.nama + ' (' + mapel.kode + ')';
+        document.getElementById('infoBobot').textContent =
+          'Bobot — Harian: ' + mapel.bobotHarian + '% | ' +
+          'Praktik: ' + mapel.bobotPraktik + '% | ' +
+          'Project: ' + mapel.bobotProject + '%';
+        document.getElementById('bobotHarian').value  = mapel.bobotHarian;
+        document.getElementById('bobotPraktik').value = mapel.bobotPraktik;
+        document.getElementById('bobotProject').value = mapel.bobotProject;
+      })
+      .getMapelGuru(guruData.nip);
+  }
+
+  function loadKelas() {
+    google.script.run
+      .withSuccessHandler(function(kelasList) {
+        const sel = document.getElementById('selectKelas');
+        kelasList.forEach(k => {
+          const opt = document.createElement('option');
+          opt.value = k;
+          opt.textContent = k;
+          sel.appendChild(opt);
+        });
+      })
+      .getDataKelas();
+  }
+
+  function loadSiswa() {
+    const kelas = document.getElementById('selectKelas').value;
+    if (!kelas) return;
+
+    const tbody = document.getElementById('tabelSiswa');
+    tbody.innerHTML = '<tr><td colspan="9" class="loading-text">Memuat data...</td></tr>';
+    document.getElementById('cardNilai').style.display = 'block';
+
+    google.script.run
+      .withSuccessHandler(function(nilaiList) {
+        google.script.run
+          .withSuccessHandler(function(siswa) {
+            siswaList = siswa;
+            renderTabel(siswa, nilaiList);
+          })
+          .getDataSiswaByKelas(kelas);
+      })
+      .getNilaiSiswa(mapelData ? mapelData.kode : '', kelas);
+  }
+
+  function renderTabel(siswa, nilaiList) {
+    const tbody = document.getElementById('tabelSiswa');
+    if (!siswa || siswa.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="9" class="loading-text">Tidak ada siswa di kelas ini.</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = '';
+    siswa.forEach((s, i) => {
+      // Cari nilai existing
+      const existing = nilaiList.find(n => String(n.nis) === String(s.nis));
+      const sudah    = existing ? true : false;
+
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${i + 1}</td>
+        <td>${s.nis}</td>
+        <td>${s.nama}</td>
+        <td><input class="nilai-input" type="number" id="h_${s.nis}"
+            min="0" max="100" value="${sudah ? existing.harian : ''}"
+            placeholder="0" oninput="hitungAkhir('${s.nis}')"></td>
+        <td><input class="nilai-input" type="number" id="p_${s.nis}"
+            min="0" max="100" value="${sudah ? existing.praktik : ''}"
+            placeholder="0" oninput="hitungAkhir('${s.nis}')"></td>
+        <td><input class="nilai-input" type="number" id="j_${s.nis}"
+            min="0" max="100" value="${sudah ? existing.project : ''}"
+            placeholder="0" oninput="hitungAkhir('${s.nis}')"></td>
+        <td id="akhir_${s.nis}">${sudah ? existing.nilaiAkhir : '-'}</td>
+        <td><span class="badge ${sudah ? 'badge-sudah' : 'badge-belum'}">
+            ${sudah ? 'Sudah' : 'Belum'}</span></td>
+        <td><button class="btn-success" onclick="simpanNilai('${s.nis}','${s.nama}','${s.kelas}')">
+            Simpan</button></td>
+      `;
+      tbody.appendChild(tr);
+    });
+  }
+
+  function hitungAkhir(nis) {
+    if (!mapelData) return;
+    const h = parseFloat(document.getElementById('h_' + nis).value) || 0;
+    const p = parseFloat(document.getElementById('p_' + nis).value) || 0;
+    const j = parseFloat(document.getElementById('j_' + nis).value) || 0;
+    const akhir = (
+      (h * mapelData.bobotHarian  / 100) +
+      (p * mapelData.bobotPraktik / 100) +
+      (j * mapelData.bobotProject / 100)
+    ).toFixed(2);
+    document.getElementById('akhir_' + nis).textContent = akhir;
+  }
+
+  function simpanNilai(nis, nama, kelas) {
+    const h = document.getElementById('h_' + nis).value;
+    const p = document.getElementById('p_' + nis).value;
+    const j = document.getElementById('j_' + nis).value;
+
+    google.script.run
+      .withSuccessHandler(function(res) {
+        if (res.sukses) {
+          tampilNotif('✅ Nilai ' + nama + ' berhasil disimpan. Nilai Akhir: ' + res.nilaiAkhir, 'sukses');
+          loadSiswa(); // reload tabel
+        } else {
+          tampilNotif('❌ Gagal: ' + res.pesan, 'error');
+        }
+      })
+      .simpanNilai({ nis, nama, kelas, harian: h, praktik: p, project: j });
+  }
+
+  function simpanBobot() {
+    const h = document.getElementById('bobotHarian').value;
+    const p = document.getElementById('bobotPraktik').value;
+    const j = document.getElementById('bobotProject').value;
+
+    google.script.run
+      .withSuccessHandler(function(res) {
+        if (res.sukses) {
+          tampilNotif('✅ Bobot berhasil diperbarui.', 'sukses');
+          loadMapelGuru();
+        } else {
+          tampilNotif('❌ ' + res.pesan, 'error');
+        }
+      })
+      .updateBobot(h, p, j);
+  }
+
+  function tampilNotif(pesan, tipe) {
+    const el = document.getElementById('notif');
+    el.textContent = pesan;
+    el.className   = 'notif notif-' + tipe;
+    el.style.display = 'block';
+    setTimeout(() => el.style.display = 'none', 4000);
+  }
+
+  function logout() {
+    google.script.run
+      .withSuccessHandler(url => window.top.location.href = url)
+      .getScriptUrl();
+  }
+</script>
+
+</body>
+</html>

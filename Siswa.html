@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Portal Nilai Siswa - TE</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: #f0f2f5;
+      min-height: 100vh;
+    }
+
+    .navbar {
+      background: #34a853;
+      color: white;
+      padding: 14px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .navbar h1 { font-size: 18px; }
+    .btn-back {
+      background: rgba(255,255,255,0.2);
+      border: none;
+      color: white;
+      padding: 6px 14px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+    }
+    .btn-back:hover { background: rgba(255,255,255,0.3); }
+
+    .main { padding: 24px; max-width: 800px; margin: 0 auto; }
+
+    .card {
+      background: white;
+      border-radius: 10px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+      padding: 20px 24px;
+      margin-bottom: 20px;
+    }
+    .card h2 {
+      font-size: 16px;
+      color: #333;
+      margin-bottom: 16px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid #eee;
+    }
+
+    /* INFO SISWA */
+    .info-siswa {
+      display: flex;
+      gap: 24px;
+      flex-wrap: wrap;
+    }
+    .info-item { flex: 1; min-width: 120px; }
+    .info-label {
+      font-size: 11px;
+      color: #888;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 4px;
+    }
+    .info-value {
+      font-size: 15px;
+      font-weight: 600;
+      color: #333;
+    }
+
+    /* TABEL NILAI */
+    .tabel-wrapper { overflow-x: auto; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+    th {
+      background: #f8f9fa;
+      padding: 10px 12px;
+      text-align: left;
+      font-weight: 600;
+      color: #555;
+      border-bottom: 2px solid #eee;
+    }
+    td {
+      padding: 10px 12px;
+      border-bottom: 1px solid #f0f0f0;
+      color: #333;
+    }
+    tr:hover td { background: #fafafa; }
+
+    /* BADGE */
+    .badge {
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+    .badge-sudah { background: #e6f4ea; color: #34a853; }
+    .badge-belum { background: #fce8e6; color: #d93025; }
+
+    /* NILAI AKHIR */
+    .nilai-besar {
+      font-size: 22px;
+      font-weight: 700;
+      color: #1a73e8;
+    }
+    .nilai-label {
+      font-size: 12px;
+      color: #888;
+      margin-top: 2px;
+    }
+
+    .loading-text {
+      color: #888;
+      font-size: 13px;
+      padding: 20px 0;
+      text-align: center;
+    }
+
+    .bobot-hint {
+      font-size: 11px;
+      color: #aaa;
+      margin-top: 4px;
+    }
+
+    .footer {
+      text-align: center;
+      font-size: 12px;
+      color: #aaa;
+      padding: 16px 0;
+    }
+  </style>
+</head>
+<body>
+
+<!-- NAVBAR -->
+<div class="navbar">
+  <h1>📊 Portal Nilai Siswa</h1>
+  <button class="btn-back" onclick="kembali()">← Kembali</button>
+</div>
+
+<div class="main">
+
+  <!-- INFO SISWA -->
+  <div class="card" id="cardSiswa" style="display:none;">
+    <h2>👤 Data Siswa</h2>
+    <div class="info-siswa">
+      <div class="info-item">
+        <div class="info-label">NIS</div>
+        <div class="info-value" id="sisNis">-</div>
+      </div>
+      <div class="info-item">
+        <div class="info-label">Nama</div>
+        <div class="info-value" id="sisNama">-</div>
+      </div>
+      <div class="info-item">
+        <div class="info-label">Kelas</div>
+        <div class="info-value" id="sisKelas">-</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TABEL NILAI -->
+  <div class="card">
+    <h2>📋 Rekap Nilai</h2>
+    <div class="tabel-wrapper">
+      <table>
+        <thead>
+          <tr>
+            <th>Mapel</th>
+            <th>Harian</th>
+            <th>Praktik</th>
+            <th>Project</th>
+            <th>Nilai Akhir</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody id="tabelNilai">
+          <tr>
+            <td colspan="6" class="loading-text">Memuat data nilai...</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="footer">
+    SMK Negeri Bansari — Jurusan Teknik Elektronika
+  </div>
+
+</div>
+
+<script>
+window.onload = function() {
+    // Ambil NIS dari template Apps Script
+    const nis = '<?= nis ?>';
+
+    if (!nis) {
+      kembali();
+      return;
+    }
+
+    // Load data siswa
+    google.script.run
+      .withSuccessHandler(function(siswa) {
+        if (!siswa) { kembali(); return; }
+
+        document.getElementById('sisNis').textContent   = siswa.nis;
+        document.getElementById('sisNama').textContent  = siswa.nama;
+        document.getElementById('sisKelas').textContent = siswa.kelas;
+        document.getElementById('cardSiswa').style.display = 'block';
+
+        // Load nilai
+        google.script.run
+          .withSuccessHandler(renderNilai)
+          .withFailureHandler(function() {
+            document.getElementById('tabelNilai').innerHTML =
+              '<tr><td colspan="6" class="loading-text">Gagal memuat nilai.</td></tr>';
+          })
+          .getNilaiByNis(nis);
+      })
+      .withFailureHandler(function() { kembali(); })
+      .getSiswaByNis(nis);
+  };
+
+  function renderNilai(nilaiList) {
+    const tbody = document.getElementById('tabelNilai');
+    if (!nilaiList || nilaiList.length === 0) {
+      tbody.innerHTML =
+        '<tr><td colspan="6" class="loading-text">Belum ada data nilai.</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = '';
+    nilaiList.forEach(n => {
+      const sudah = n.status === 'sudah';
+      const tr    = document.createElement('tr');
+      tr.innerHTML = `
+        <td>
+          <strong>${n.kode}</strong><br>
+          <span style="font-size:12px; color:#888;">${n.mapel}</span>
+        </td>
+        <td>
+          ${sudah ? n.harian : '-'}
+          ${sudah ? '<div class="bobot-hint">' + n.bobot.harian + '%</div>' : ''}
+        </td>
+        <td>
+          ${sudah ? n.praktik : '-'}
+          ${sudah ? '<div class="bobot-hint">' + n.bobot.praktik + '%</div>' : ''}
+        </td>
+        <td>
+          ${sudah ? n.project : '-'}
+          ${sudah ? '<div class="bobot-hint">' + n.bobot.project + '%</div>' : ''}
+        </td>
+        <td>
+          ${sudah
+            ? '<span class="nilai-besar">' + n.nilaiAkhir + '</span>'
+            : '-'}
+        </td>
+        <td>
+          <span class="badge ${sudah ? 'badge-sudah' : 'badge-belum'}">
+            ${sudah ? 'Sudah' : 'Belum'}
+          </span>
+          ${sudah
+            ? '<div class="bobot-hint">' + n.tglInput + '</div>'
+            : ''}
+        </td>
+      `;
+      tbody.appendChild(tr);
+    });
+  }
+
+  function kembali() {
+    google.script.run
+      .withSuccessHandler(url => window.top.location.href = url)
+      .getScriptUrl();
+  }
+</script>
+
+</body>
+</html>

@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RekapNilai TE - Login</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: #f0f2f5;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .container {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+      padding: 40px;
+      width: 100%;
+      max-width: 420px;
+      text-align: center;
+    }
+
+    .logo {
+      font-size: 48px;
+      margin-bottom: 12px;
+    }
+
+    h1 {
+      font-size: 22px;
+      color: #1a73e8;
+      margin-bottom: 4px;
+    }
+
+    .subtitle {
+      font-size: 13px;
+      color: #666;
+      margin-bottom: 32px;
+    }
+
+    .divider {
+      border: none;
+      border-top: 1px solid #e0e0e0;
+      margin: 24px 0;
+    }
+
+    /* Tombol Guru */
+    .btn-guru {
+      display: block;
+      width: 100%;
+      padding: 14px;
+      background: #1a73e8;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      text-decoration: none;
+      margin-bottom: 12px;
+      transition: background 0.2s;
+    }
+    .btn-guru:hover { background: #1557b0; }
+
+    /* Area Siswa */
+    .siswa-section { margin-top: 8px; }
+
+    .siswa-section p {
+      font-size: 13px;
+      color: #666;
+      margin-bottom: 12px;
+    }
+
+    .input-nis {
+      width: 100%;
+      padding: 12px 14px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      font-size: 15px;
+      margin-bottom: 10px;
+      outline: none;
+      transition: border 0.2s;
+    }
+    .input-nis:focus { border-color: #1a73e8; }
+
+    .btn-siswa {
+      display: block;
+      width: 100%;
+      padding: 12px;
+      background: #34a853;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .btn-siswa:hover { background: #2d9248; }
+
+    .pesan-error {
+      color: #d93025;
+      font-size: 13px;
+      margin-top: 8px;
+      display: none;
+    }
+
+    .loading {
+      color: #666;
+      font-size: 13px;
+      margin-top: 8px;
+      display: none;
+    }
+
+    .footer {
+      margin-top: 28px;
+      font-size: 12px;
+      color: #aaa;
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <div class="logo">📊</div>
+  <h1>RekapNilai TE</h1>
+  <p class="subtitle">SMK Negeri Bansari — Jurusan Teknik Elektronika</p>
+
+  <!-- Login Guru -->
+  <button class="btn-guru" onclick="loginGuru()">
+    🔐 Masuk sebagai Guru
+  </button>
+
+  <hr class="divider">
+
+  <!-- Portal Siswa -->
+  <div class="siswa-section">
+    <p>Siswa — masukkan NIS untuk melihat nilai</p>
+    <input
+      type="text"
+      class="input-nis"
+      id="inputNis"
+      placeholder="Masukkan NIS"
+      maxlength="20"
+      onkeypress="if(event.key==='Enter') cekNilaiSiswa()"
+    >
+    <button class="btn-siswa" onclick="cekNilaiSiswa()">
+      🔍 Cek Nilai Saya
+    </button>
+    <p class="pesan-error" id="pesanError">NIS tidak ditemukan.</p>
+    <p class="loading" id="loading">Mencari data...</p>
+  </div>
+
+  <div class="footer">RekapNilai TE &copy; SMK Negeri Bansari</div>
+</div>
+
+<script>
+  function loginGuru() {
+    google.script.run
+      .withSuccessHandler(function(url) {
+        window.top.location.href = url + '?page=dashboard';
+      })
+      .getScriptUrl();
+  }
+
+  function cekNilaiSiswa() {
+    const nis = document.getElementById('inputNis').value.trim();
+    if (!nis) {
+      tampilError('NIS tidak boleh kosong.');
+      return;
+    }
+
+    document.getElementById('loading').style.display = 'block';
+    document.getElementById('pesanError').style.display = 'none';
+
+    google.script.run
+      .withSuccessHandler(function(siswa) {
+        document.getElementById('loading').style.display = 'none';
+        if (!siswa) {
+          tampilError('NIS tidak ditemukan.');
+          return;
+        }
+        google.script.run
+          .withSuccessHandler(function(url) {
+            window.top.location.href = url + '?page=siswa&nis=' + nis;
+          })
+          .getScriptUrl();
+      })
+      .withFailureHandler(function(err) {
+        document.getElementById('loading').style.display = 'none';
+        tampilError('Terjadi kesalahan. Coba lagi.');
+      })
+      .getSiswaByNis(nis);
+  }
+
+  function tampilError(pesan) {
+    const el = document.getElementById('pesanError');
+    el.textContent = pesan;
+    el.style.display = 'block';
+  }
+</script>
+
+</body>
+</html>
