@@ -315,7 +315,7 @@
           meta.innerHTML = p.mime + ' • ' + fmtUkuran(p.size) +
             ' • <a href="' + esc(p.urlBuka) + '" target="_blank">buka di Drive ↗</a>' +
             ' • <a href="' + esc(p.urlUnduh) + '" target="_blank">unduh ↓</a>';
-          if(p.mode === 'gambar') stage.innerHTML = '<img src="' + esc(p.urlLangsung) + '" alt="">';
+          if(p.mode === 'gambar') stage.innerHTML = '<img src="' + esc(p.urlThumb) + '" alt="" onerror="this.onerror=null;this.src=\'' + esc(p.urlLangsung) + '\'">';
           else if(p.mode === 'video') stage.innerHTML = '<iframe src="' + esc(p.urlPreview) + '" allow="autoplay" allowfullscreen></iframe>';
           else if(p.mode === 'audio') stage.innerHTML = '<audio controls src="' + esc(p.urlLangsung) + '" style="width:100%;margin:20px"></audio>';
           else if(p.mode === 'teks' && p.teks != null) stage.innerHTML = '<pre style="margin:0;padding:16px;background:#fff;color:#111;max-height:70vh;overflow:auto;white-space:pre-wrap;width:100%">' + esc(p.teks) + '</pre>';

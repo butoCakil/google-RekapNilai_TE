@@ -25,6 +25,7 @@ function getPreviewInfo(fileId) {
       urlPreview : 'https://drive.google.com/file/d/' + fileId + '/preview',
       urlUnduh   : 'https://drive.google.com/uc?export=download&id=' + fileId,
       urlLangsung: 'https://drive.google.com/uc?export=view&id=' + fileId,
+      urlThumb   : 'https://drive.google.com/thumbnail?id=' + fileId + '&sz=w1600',
       urlBuka    : file.getUrl(),
       teks       : mode === 'teks' && size < 200000 ? file.getBlob().getDataAsString() : null
     };

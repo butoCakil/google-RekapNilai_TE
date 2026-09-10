@@ -19,6 +19,7 @@
     .letter-btns{display:flex;gap:6px;flex-wrap:wrap}
     .letter-btns button{border:1.5px solid var(--line);background:#fff;border-radius:9px;padding:8px 12px;font-weight:800;cursor:pointer}
     .letter-btns button.on{background:var(--brand);color:#fff;border-color:var(--brand)}
+    #blokNilai{margin-bottom:12px}
   </style>
 </head>
 <body>
@@ -315,7 +316,7 @@
           idx = i; var p = list[i];
           meta.innerHTML = list.map(function(x, j){ return '<a href="#" data-j="' + j + '" style="' + (j === i ? 'font-weight:800' : '') + '">' + esc(x.nama) + '</a>'; }).join(' · ') +
             ' — <a href="' + esc(p.urlBuka) + '" target="_blank">Drive ↗</a>';
-          if(p.mode === 'gambar') stage.innerHTML = '<img src="' + esc(p.urlLangsung) + '">';
+          if(p.mode === 'gambar') stage.innerHTML = '<img src="' + esc(p.urlThumb) + '" onerror="this.onerror=null;this.src=\'' + esc(p.urlLangsung) + '\'">';
           else if(p.mode === 'video') stage.innerHTML = '<iframe src="' + esc(p.urlPreview) + '" allowfullscreen></iframe>';
           else if(p.mode === 'teks' && p.teks != null) stage.innerHTML = '<pre style="margin:0;padding:14px;background:#fff;max-height:60vh;overflow:auto;white-space:pre-wrap;width:100%">' + esc(p.teks) + '</pre>';
           else stage.innerHTML = '<iframe src="' + esc(p.urlPreview) + '"></iframe>';
