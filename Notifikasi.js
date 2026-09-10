@@ -25,9 +25,14 @@ function kirimNotifikasiKeGuru(nip, tipe, pesan, tugasId) {
 }
 
 function kirimNotifikasiKeKelas(kelas, tipe, pesan, tugasId) {
-  getDataSiswaByKelas(kelas).forEach(function (s) {
-    kirimNotifikasiKeSiswa(s.nis, tipe, pesan, tugasId);
+  const siswa = getDataSiswaByKelas(kelas);
+  if (!siswa.length) return;
+  const sheet = _ssRekap().getSheetByName(CONFIG.SHEET.NOTIFIKASI);
+  const now = new Date();
+  const rows = siswa.map(function (s, i) {
+    return [buatId('NTF') + '-' + i, 'siswa', String(s.nis), tipe, pesan, tugasId || '', false, now];
   });
+  sheet.getRange(sheet.getLastRow() + 1, 1, rows.length, 8).setValues(rows);
 }
 
 // ------------------------------------------------

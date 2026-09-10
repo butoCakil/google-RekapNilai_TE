@@ -76,8 +76,9 @@ function buatRekapSpreadsheet(payload) {
     DriveApp.getFileById(ssBaru.getId()).moveTo(folder);
 
     blok.forEach(function (b, i) {
-      const sheet = i === 0 ? ssBaru.getSheets()[0].setName(b.judul.slice(0, 90))
-                            : ssBaru.insertSheet(b.judul.slice(0, 90));
+      const namaSheet = _namaSheetAman(b.judul, i);
+      const sheet = i === 0 ? ssBaru.getSheets()[0].setName(namaSheet)
+                            : ssBaru.insertSheet(namaSheet);
       _tulisBlok(sheet, b);
     });
 
@@ -93,6 +94,11 @@ function buatRekapSpreadsheet(payload) {
     Logger.log('buatRekapSpreadsheet error: ' + e.stack);
     return { sukses: false, pesan: e.message };
   }
+}
+
+function _namaSheetAman(judul, i) {
+  var s = String(judul).replace(/[\[\]:\\\/?*]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 85);
+  return (s || 'Rekap') + ' ' + (i + 1);
 }
 
 function _blokRekapTugas(rk) {
