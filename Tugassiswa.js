@@ -17,7 +17,8 @@ function getSemuaTugasSiswa(nis) {
     for (let j = 1; j < dataSub.length; j++) {
       if (dataSub[j][1] === tugasId && String(dataSub[j][2]) === String(nis)) {
         submisi = {
-          submissionId: dataSub[j][0], fileUrl: dataSub[j][5], waktuUpload: dataSub[j][7],
+          submissionId: dataSub[j][0], fileUrl: dataSub[j][5],
+          waktuUpload: dataSub[j][7] ? new Date(dataSub[j][7]).toISOString() : null,
           status: dataSub[j][8], nilaiAngka: dataSub[j][9], nilaiHuruf: dataSub[j][10],
           catatan: dataSub[j][11]
         };
@@ -29,10 +30,10 @@ function getSemuaTugasSiswa(nis) {
       tugasId: tugasId,
       judul: dataTugas[i][1],
       deskripsi: dataTugas[i][2],
-      deadline: dataTugas[i][4],
+      deadline: new Date(dataTugas[i][4]).toISOString(),
       lampiranUrl: dataTugas[i][6],
       jenisPenilaian: dataTugas[i][7],
-      tglDibuat: dataTugas[i][8],
+      tglDibuat: new Date(dataTugas[i][8]).toISOString(),
       submisi: submisi,
       status: submisi ? submisi.status : 'Belum Upload'
     });
