@@ -74,7 +74,8 @@ agar menarik untuk siswa.
 
 ## Skema sheet
 
-**Tugas**: `ID · Judul · Deskripsi · Kelas · Deadline · GuruPembuat · LampiranMateriURL · JenisPenilaian · TglDibuat · Status`
+**Tugas**: `ID · Judul · Deskripsi · Kelas · Deadline · GuruPembuat · LampiranMateriURL · JenisPenilaian · TglDibuat · Status · Kategori · JenisFile`
+(Kategori = Harian/Praktik/Project → dipakai akumulasi nilai rapor. JenisFile = CSV jenis berkas yang boleh diunggah, mis. `gambar,pdf` atau `semua`.)
 
 **Submission**: `ID · TugasID · NIS · Nama · Kelas · FileURL · FileDriveID · WaktuUpload · Status · NilaiAngka · NilaiHuruf · Catatan · WaktuDinilai · DinilaiOleh · LampiranJSON · DiuploadOleh`
 

@@ -80,7 +80,19 @@
 
     function setView(html){ document.getElementById('view').innerHTML = html; }
     function loading(txt){ setView('<div class="loading"><div class="spinner"></div>' + (txt||'Memuat…') + '</div>'); }
-    function keluar(){ top.location.href = SCRIPT_URL + '?page=loginTugas'; }
+    try { sessionStorage.removeItem('rk_out'); } catch(e){}
+    function keluar(){
+      try { sessionStorage.setItem('rk_out', '1'); } catch(e){}
+      var url = SCRIPT_URL + '?page=keluar&token=' + encodeURIComponent(TOKEN);
+      grun('logoutSiswaTugas', TOKEN).then(function(){ top.location.href = url; })
+        .catch(function(){ top.location.href = url; });
+    }
+    // Setelah logout, blokir tombol "back" yang memuat halaman dari cache.
+    window.addEventListener('pageshow', function(e){
+      var out = false; try { out = sessionStorage.getItem('rk_out') === '1'; } catch(err){}
+      if(out){ top.location.replace(SCRIPT_URL + '?page=keluar'); return; }
+      if(e.persisted) route();
+    });
 
     function updateBell(n){
       ['bellCount','navBell'].forEach(function(id){
@@ -99,9 +111,10 @@
         updateBell(d.notifikasiBelum);
         var g = d.gamifikasi;
 
+        var dapatN = g.badge.filter(function(b){ return b.dapat; }).length;
         var medals = g.badge.map(function(b){
-          return '<div class="medal ' + (b.dapat ? 'on' : '') + '">' +
-                   '<div class="disc">' + (b.dapat ? '🏅' : '🔒') + '</div>' +
+          return '<div class="medal ' + (b.dapat ? 'on t' + (b.tingkat || 1) : '') + '" title="' + esc(b.syarat) + '">' +
+                   '<div class="disc">' + (b.dapat ? (b.ikon || '🏅') : '🔒') + '</div>' +
                    '<div class="lbl">' + esc(b.nama) + '</div></div>';
         }).join('');
 
@@ -140,8 +153,11 @@
                               : '<div class="empty"><div class="ic">📭</div>Belum ada tugas untuk kelasmu.</div>') +
           '</div>';
 
-        var badges = '<div class="panel" style="margin-top:18px"><div class="section-title">🏆 Lencana</div>' +
-          '<div class="medals">' + medals + '</div></div>';
+        var badges = '<div class="panel" style="margin-top:18px">' +
+          '<div class="row-between"><div class="section-title" style="margin:0">🏆 Lencana</div>' +
+          '<span class="tag">' + dapatN + ' / ' + g.badge.length + ' terkumpul</span></div>' +
+          '<div class="medals" style="margin-top:12px">' + medals + '</div>' +
+          '<div class="small muted" style="margin-top:10px">Arahkan kursor ke lencana untuk melihat syaratnya.</div></div>';
 
         setView(hero + stats + todo + path + badges);
       }).catch(function(e){ setView(errBox(e)); });
@@ -173,7 +189,8 @@
         '<div class="dot ' + s + '">' + ikon + '</div>' +
         '<div class="body" onclick="location.hash=\'#/detail/' + t.tugasId + '\'">' +
           '<div class="row-between"><div class="t">' + esc(t.judul) + '</div>' + nilai + '</div>' +
-          '<div class="m">Deadline ' + fmtTgl(t.deadline) + ' • ' + sisaDeadline(t.deadline).label +
+          '<div class="m">' + (t.kategori ? '<span class="tag">' + esc(t.kategori) + '</span> • ' : '') +
+            'Deadline ' + fmtTgl(t.deadline) + ' • ' + sisaDeadline(t.deadline).label +
             (t.catatan ? ' • 💬 ada catatan guru' : '') + '</div>' +
         '</div></div>';
     }
@@ -197,7 +214,7 @@
             '<button class="btn btn-ghost btn-sm" onclick="location.hash=\'#/journey\'">← Kembali</button>' +
             '<div class="quest-hd" style="margin-top:12px">' +
               '<h2 class="h-hero" style="color:var(--ink)">' + esc(t.judul) + '</h2>' +
-              '<div class="small muted">' + esc(t.kelas) + ' • Deadline ' + fmtTglJam(t.deadline) +
+              '<div class="small muted">' + esc(t.kelas) + ' • <span class="tag">' + esc(t.kategori) + '</span> • Deadline ' + fmtTglJam(t.deadline) +
                 ' • <b>' + sisaDeadline(t.deadline).label + '</b> • Penilaian: ' + t.jenisPenilaian + '</div>' +
             '</div>' +
             (t.deskripsi ? '<div class="card-flat" style="white-space:pre-wrap">' + esc(t.deskripsi) + '</div>' : '') +
@@ -240,8 +257,8 @@
               '<div class="section-title">' + (s ? '♻️ Unggah ulang' : '⬆️ Kumpulkan tugas') + '</div>' +
               '<div class="dz" id="dz"><div class="ic">📁</div>' +
                 '<div style="font-weight:800;margin-top:6px">Tarik berkas ke sini atau klik untuk memilih</div>' +
-                '<div class="small muted">Gambar, PDF, Word, teks, video — beberapa berkas boleh</div></div>' +
-              '<input type="file" id="fileInput" multiple hidden>' +
+                '<div class="small muted">Diizinkan: <b>' + esc(t.izinFileLabel || 'Semua jenis berkas') + '</b> — beberapa berkas boleh</div></div>' +
+              '<input type="file" id="fileInput" multiple hidden' + (acceptAttr(t.jenisFile) ? ' accept="' + esc(acceptAttr(t.jenisFile)) + '"' : '') + '>' +
               '<div id="fileList"></div>' +
               '<button class="btn btn-primary" id="btnKirim" style="margin-top:14px" disabled>Kirim tugas</button>' +
             '</div>'
@@ -251,11 +268,11 @@
 
         if(t.lampiranMateri && t.lampiranMateri.fileId) embedPreview('materiPrev', [t.lampiranMateri.fileId]);
         if(s && s.lampiran && s.lampiran.length) embedPreview('kumpulanPrev', s.lampiran.map(function(l){ return l.id; }));
-        if(bisaUpload) wireUpload(tugasId);
+        if(bisaUpload) wireUpload(tugasId, t.jenisFile || ['semua']);
       }).catch(function(e){ setView(errBox(e)); });
     }
 
-    function wireUpload(tugasId){
+    function wireUpload(tugasId, izinFile){
       var dz = $('#dz'), input = $('#fileInput'), list = $('#fileList'), btn = $('#btnKirim');
       dz.onclick = function(){ input.click(); };
       ['dragenter','dragover'].forEach(function(ev){ dz.addEventListener(ev, function(e){ e.preventDefault(); dz.classList.add('drag'); }); });
@@ -264,7 +281,12 @@
       input.onchange = function(){ tambahFile(input.files); input.value = ''; };
 
       function tambahFile(fl){
-        Array.prototype.slice.call(fl).forEach(function(f){ _uploadFiles.push(f); });
+        var tolak = [];
+        Array.prototype.slice.call(fl).forEach(function(f){
+          if(fileCocok(f, izinFile)) _uploadFiles.push(f);
+          else tolak.push(f.name);
+        });
+        if(tolak.length) toast('Ditolak (jenis tidak sesuai): ' + tolak.join(', '), 'err');
         gambarList();
       }
       function gambarList(){
@@ -398,20 +420,25 @@
       grun('getNotifikasiSiswaToken', TOKEN).then(function(d){
         if(!d.ok){ return keluar(); }
         var items = d.aktivitas || [];
+        var adaBaru = items.some(function(a){ return !a.dibaca; });
         var list = items.length ? items.map(function(a){
-          return '<div class="file-row" style="align-items:flex-start;' + (a.dibaca ? '' : 'border-color:var(--brand)') + '">' +
+          return '<div class="file-row" style="align-items:flex-start;' + (a.dibaca ? '' : 'border-color:var(--brand);background:#f2f0ff') + '">' +
             '<span style="font-size:18px">' + a.ikon + '</span>' +
             '<div class="grow" style="white-space:normal">' + esc(a.pesan) +
-              '<div class="small muted">' + a.waktuLabel + '</div></div>' +
+              '<div class="small muted">' + a.waktuLabel + (a.dibaca ? '' : ' • baru') + '</div></div>' +
             (a.tugasId ? '<button class="btn btn-ghost btn-sm" onclick="location.hash=\'#/detail/' + a.tugasId + '\'">Lihat</button>' : '') +
           '</div>';
         }).join('') : '<div class="empty"><div class="ic">🔔</div>Belum ada aktivitas.</div>';
-        setView('<div class="panel"><div class="row-between"><div class="section-title" style="margin:0">🔔 Aktivitas & Notifikasi</div>' +
-          '<button class="btn btn-ghost btn-sm" id="btnRead">Tandai semua dibaca</button></div><div style="margin-top:12px">' + list + '</div></div>');
-        var br = $('#btnRead');
-        if(br) br.onclick = function(){
-          grun('tandaiSemuaDibacaToken', TOKEN).then(function(){ updateBell(0); renderNotifikasi(); });
-        };
+        setView('<div class="panel"><div class="section-title">🔔 Aktivitas & Notifikasi</div>' +
+          '<div style="margin-top:4px">' + list + '</div></div>');
+
+        // Membuka tab ini = menandai semua sudah dibaca (badge langsung 0 & tetap 0).
+        if(adaBaru){
+          grun('tandaiSemuaDibacaToken', TOKEN).then(function(){
+            if(DASH) DASH.notifikasiBelum = 0;
+          });
+        }
+        if(DASH) DASH.notifikasiBelum = 0;
         updateBell(0);
       }).catch(function(e){ setView(errBox(e)); });
     }

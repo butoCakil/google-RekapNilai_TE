@@ -47,7 +47,8 @@ function mintUploadTugasSiswa(token, tugasId) {
     ok: true,
     accessToken: ScriptApp.getOAuthToken(),
     folderId: folder.getId(),
-    prefixNama: String(siswa.nis) + '_' + siswa.nama + '_'
+    prefixNama: String(siswa.nis) + '_' + siswa.nama + '_',
+    jenisFile: _jenisFileArr(tugas.JenisFile)
   };
 }
 
@@ -102,6 +103,7 @@ function _catatSubmission(tugas, siswa, files, diuploadOleh) {
     const folder = getFolderTugas(tugas.ID, tugas.Judul);
     const folderId = folder.getId();
     const emailDeployer = _emailDeployer();
+    const izinFile = _jenisFileArr(tugas.JenisFile);
 
     const lampiran = [];
     files.forEach(function (f) {
@@ -117,6 +119,12 @@ function _catatSubmission(tugas, siswa, files, diuploadOleh) {
 
       const umurMenit = (new Date() - file.getDateCreated()) / 60000;
       if (umurMenit > 120) throw new Error('Berkas "' + file.getName() + '" bukan berkas upload baru');
+
+      if (!fileTipeCocok(file.getName(), file.getMimeType(), izinFile)) {
+        // buang berkas yang tidak sesuai supaya tidak menyampah di Drive
+        try { file.setTrashed(true); } catch (e) {}
+        throw new Error('Berkas "' + file.getName() + '" tidak sesuai. Yang diizinkan: ' + labelIzinFile(izinFile));
+      }
 
       try {
         if (emailDeployer && file.getOwner() && file.getOwner().getEmail() !== emailDeployer) {

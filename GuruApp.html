@@ -67,7 +67,16 @@
     }
     function setView(html){ document.getElementById('view').innerHTML = html; }
     function loading(t){ setView('<div class="loading"><div class="spinner"></div>' + (t || 'Memuat…') + '</div>'); }
-    function keluar(){ top.location.href = SCRIPT_URL; }
+    try { sessionStorage.removeItem('rk_out'); } catch(e){}
+    function keluar(){
+      try { sessionStorage.setItem('rk_out', '1'); } catch(e){}
+      top.location.href = SCRIPT_URL + '?page=keluar';
+    }
+    window.addEventListener('pageshow', function(e){
+      var out = false; try { out = sessionStorage.getItem('rk_out') === '1'; } catch(err){}
+      if(out){ top.location.replace(SCRIPT_URL + '?page=keluar'); return; }
+      if(e.persisted) route();
+    });
     function statTile(k, v, ic){ return '<div class="stat"><div class="ic">' + ic + '</div><div class="k">' + k + '</div><div class="v">' + v + '</div></div>'; }
     function errBox(e){ return '<div class="panel"><div class="empty"><div class="ic">⚠️</div>' + esc(e && e.message || e) +
       '<br><button class="btn btn-ghost btn-sm" style="margin-top:10px" onclick="route()">Coba lagi</button></div></div>'; }
@@ -124,9 +133,11 @@
         var cards = list.length ? list.map(function(t){
           var sd = sisaDeadline(t.deadline);
           return '<div class="card"><div class="row-between">' +
-            '<div><div style="font-weight:800;font-size:15px">' + esc(t.judul) + '</div>' +
+            '<div><div style="font-weight:800;font-size:15px">' + esc(t.judul) +
+              ' <span class="tag">' + esc(t.kategori || 'Harian') + '</span></div>' +
               '<div class="small muted">' + esc(t.kelas) + ' • deadline ' + fmtTgl(t.deadline) + ' • ' + sd.label +
-              ' • nilai ' + t.jenisPenilaian + (t.status === 'Arsip' ? ' • <b>arsip</b>' : '') + '</div></div>' +
+              ' • nilai ' + t.jenisPenilaian + ' • berkas: ' + esc(labelIzin(t.jenisFile)) +
+              (t.status === 'Arsip' ? ' • <b>arsip</b>' : '') + '</div></div>' +
             '<div style="display:flex;gap:6px;flex-wrap:wrap">' +
               '<button class="btn btn-ghost btn-sm" onclick="location.hash=\'#/rekap/' + t.id + '\'">Rekap</button>' +
               '<button class="btn btn-ghost btn-sm" data-edit="' + t.id + '">Edit</button>' +
@@ -172,19 +183,44 @@
           '<div><label class="f">Deadline</label><input class="input" type="datetime-local" id="tDeadline" value="' + dlVal + '"></div>' +
         '</div>' +
         '<div class="grid cols-2" style="margin-top:14px">' +
+          '<div><label class="f">Kategori (untuk rekap rapor)</label><select class="input" id="tKategori">' +
+            ['Harian','Praktik','Project'].map(function(k){
+              return '<option ' + ((t.kategori || 'Harian') === k ? 'selected' : '') + '>' + k + '</option>';
+            }).join('') + '</select></div>' +
           '<div><label class="f">Jenis penilaian</label><select class="input" id="tJenis">' +
             '<option value="angka"' + (t.jenisPenilaian === 'angka' ? ' selected' : '') + '>Angka (0–100)</option>' +
             '<option value="huruf"' + (t.jenisPenilaian === 'huruf' ? ' selected' : '') + '>Huruf (A, A-, B+ …)</option></select></div>' +
-          '<div><label class="f">Link berkas materi (opsional)</label><input class="input" id="tLampiran" placeholder="URL Google Drive" value="' + esc(t.lampiranUrl || '') + '"></div>' +
         '</div>' +
+        '<div class="field" style="margin-top:14px"><label class="f">Jenis berkas yang boleh diunggah siswa</label>' +
+          '<div id="tJenisFile" style="display:flex;gap:14px;flex-wrap:wrap;padding:4px 0">' +
+            [['semua','Semua'],['gambar','Gambar'],['pdf','PDF'],['word','Word'],['excel','Excel'],['ppt','PowerPoint'],['teks','Teks'],['video','Video'],['audio','Audio']].map(function(o){
+              var checked = (!t.jenisFile || !t.jenisFile.length)
+                ? (o[0] === 'semua')
+                : (t.jenisFile.indexOf(o[0]) >= 0);
+              return '<label style="display:flex;gap:5px;align-items:center;font-size:13px;font-weight:600;cursor:pointer">' +
+                '<input type="checkbox" value="' + o[0] + '"' + (checked ? ' checked' : '') + '> ' + o[1] + '</label>';
+            }).join('') +
+          '</div><div class="small muted">Centang "Semua" untuk membebaskan. Kalau memilih spesifik, jangan centang "Semua".</div></div>' +
+        '<div class="field" style="margin-top:12px"><label class="f">Link berkas materi (opsional)</label>' +
+          '<input class="input" id="tLampiran" placeholder="URL Google Drive" value="' + esc(t.lampiranUrl || '') + '"></div>' +
         '<div style="margin-top:18px;display:flex;gap:8px;justify-content:flex-end">' +
           '<button class="btn btn-ghost" onclick="tutupModal()">Batal</button>' +
           '<button class="btn btn-primary" id="tSimpan">' + (edit ? 'Simpan' : 'Buat') + '</button></div>'
       );
+      $all('#tJenisFile input').forEach(function(c){
+        c.onchange = function(){
+          if(c.value === 'semua' && c.checked) $all('#tJenisFile input').forEach(function(x){ if(x !== c) x.checked = false; });
+          else if(c.value !== 'semua' && c.checked){ var s = $('#tJenisFile input[value="semua"]'); if(s) s.checked = false; }
+        };
+      });
       document.getElementById('tSimpan').onclick = function(){
+        var jf = $all('#tJenisFile input:checked').map(function(c){ return c.value; });
+        if(jf.indexOf('semua') >= 0 || !jf.length) jf = ['semua'];
         var p = {
           id: t.id, judul: $('#tJudul').value.trim(), deskripsi: $('#tDesk').value.trim(),
           kelas: $('#tKelas').value, deadline: $('#tDeadline').value,
+          kategori: $('#tKategori').value,
+          jenisFile: jf,
           jenisPenilaian: $('#tJenis').value, lampiranUrl: $('#tLampiran').value.trim()
         };
         if(!p.judul || !p.kelas || !p.deadline) return toast('Judul, kelas, deadline wajib diisi', 'err');
@@ -239,8 +275,10 @@
 
         setView(
           '<div class="panel"><button class="btn btn-ghost btn-sm" onclick="location.hash=\'#/rekap\'">← Semua tugas</button>' +
-            '<div class="quest-hd" style="margin-top:10px"><h2 class="h-hero" style="color:var(--ink)">' + esc(t.judul) + '</h2>' +
-            '<div class="small muted">' + esc(t.kelas) + ' • deadline ' + fmtTglJam(t.deadline) + ' • penilaian ' + t.jenisPenilaian + '</div></div>' +
+            '<div class="quest-hd" style="margin-top:10px"><h2 class="h-hero" style="color:var(--ink)">' + esc(t.judul) +
+              ' <span class="tag">' + esc(t.kategori || 'Harian') + '</span></h2>' +
+            '<div class="small muted">' + esc(t.kelas) + ' • deadline ' + fmtTglJam(t.deadline) + ' • penilaian ' + t.jenisPenilaian +
+              ' • berkas: ' + esc(labelIzin(t.jenisFile)) + '</div></div>' +
             (t.deskripsi ? '<div class="card-flat" style="white-space:pre-wrap;margin-top:10px">' + esc(t.deskripsi) + '</div>' : '') +
             '<div class="grid cols-4" style="margin-top:14px">' +
               statTile('Total siswa', s.total, '👥') + statTile('Terkumpul', s.terkumpul, '📥') +
@@ -350,14 +388,23 @@
     var _guruFiles = [];
     function modalUploadGuru(tugas, nis, nama){
       _guruFiles = [];
+      var izin = tugas.jenisFile || ['semua'];
       modal('<div class="modal-head"><h3>Unggah untuk ' + esc(nama) + '</h3><button class="x" onclick="tutupModal()">✕</button></div>' +
-        '<div class="small muted" style="margin-bottom:10px">Tugas: <b>' + esc(tugas.judul) + '</b> • ' + esc(tugas.kelas) + ' • NIS ' + esc(nis) + '</div>' +
+        '<div class="small muted" style="margin-bottom:10px">Tugas: <b>' + esc(tugas.judul) + '</b> • ' + esc(tugas.kelas) + ' • NIS ' + esc(nis) +
+        ' • diizinkan: <b>' + esc(labelIzin(izin)) + '</b></div>' +
         '<div class="dz" id="gdz"><div class="ic">📁</div><div style="font-weight:800;margin-top:6px">Pilih berkas siswa</div></div>' +
-        '<input type="file" id="gInput" multiple hidden><div id="gList"></div>' +
+        '<input type="file" id="gInput" multiple hidden' + (acceptAttr(izin) ? ' accept="' + esc(acceptAttr(izin)) + '"' : '') + '><div id="gList"></div>' +
         '<button class="btn btn-primary" id="gKirim" style="margin-top:14px;width:100%" disabled>Unggah</button>');
       var dz = $('#gdz'), input = $('#gInput'), list = $('#gList'), btn = $('#gKirim');
       dz.onclick = function(){ input.click(); };
-      input.onchange = function(){ Array.prototype.slice.call(input.files).forEach(function(f){ _guruFiles.push(f); }); input.value = ''; draw(); };
+      input.onchange = function(){
+        var tolak = [];
+        Array.prototype.slice.call(input.files).forEach(function(f){
+          if(fileCocok(f, izin)) _guruFiles.push(f); else tolak.push(f.name);
+        });
+        if(tolak.length) toast('Ditolak (jenis tidak sesuai): ' + tolak.join(', '), 'err');
+        input.value = ''; draw();
+      };
       function draw(){
         list.innerHTML = _guruFiles.map(function(f, i){
           return '<div class="file-row"><span>📄</span><span class="grow">' + esc(f.name) + '</span><span class="small muted">' + fmtUkuran(f.size) + '</span>' +
@@ -428,8 +475,11 @@
         '<p class="muted small">Rekap dibuat sebagai Google Spreadsheet rapi (bisa diunduh sebagai Excel).</p>' +
         '<div class="grid cols-2" style="margin-top:10px">' +
           '<div class="card-flat"><label class="f">Per kelas</label><select class="input" id="uKelas">' + opsiKelas() + '</select>' +
-            '<button class="btn btn-primary" style="margin-top:10px" onclick="buatUnduh({mode:\'kelas\',kelas:$(\'#uKelas\').value})">Buat rekap kelas</button></div>' +
-          '<div class="card-flat"><label class="f">Semua kelas</label><p class="small muted">Satu file, satu sheet per kelas.</p>' +
+            '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px">' +
+              '<button class="btn btn-primary btn-sm" onclick="buatUnduh({mode:\'kelas\',kelas:$(\'#uKelas\').value})">Rekap kelas + rincian kategori</button>' +
+              '<button class="btn btn-ghost btn-sm" onclick="buatUnduh({mode:\'kategori\',kelas:$(\'#uKelas\').value})">Rincian kategori saja</button>' +
+            '</div></div>' +
+          '<div class="card-flat"><label class="f">Semua kelas</label><p class="small muted">Satu file, per kelas: rekap tugas + rincian kategori.</p>' +
             '<button class="btn btn-primary" style="margin-top:10px" onclick="buatUnduh({mode:\'semua\'})">Buat rekap lengkap</button></div>' +
         '</div><div id="uHasil" style="margin-top:16px"></div>' +
         '<div class="section-title" style="margin-top:22px">Per tugas</div><div id="uTugasList" class="grid" style="gap:10px"></div></div>');
@@ -441,7 +491,7 @@
       });
     }
     function buatUnduh(payload){
-      if(payload.mode === 'kelas' && !payload.kelas) return toast('Pilih kelas dulu', 'err');
+      if((payload.mode === 'kelas' || payload.mode === 'kategori') && !payload.kelas) return toast('Pilih kelas dulu', 'err');
       var box = $('#uHasil'); box.innerHTML = '<div class="loading"><div class="spinner"></div>Menyusun rekap…</div>';
       grun('buatRekapSpreadsheet', payload).then(function(r){
         if(!r.sukses){ box.innerHTML = ''; return toast(r.pesan, 'err'); }
@@ -466,8 +516,14 @@
         setView(
           '<div class="panel"><div class="section-title">📚 Mapel Anda</div><div id="rMapel">' + infoMapel + '</div></div>' +
           (m ? '<div class="panel" style="margin-top:16px"><div class="section-title">🏫 Pilih Kelas</div>' +
-            '<select class="input" id="rKelas" style="max-width:280px" onchange="muatNilaiKelas(this.value)">' + opsiKelas() + '</select>' +
-            '<div id="rTabel" style="margin-top:16px"><div class="empty small">Pilih kelas untuk mulai input.</div></div></div>' +
+            '<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">' +
+              '<select class="input" id="rKelas" style="max-width:260px" onchange="muatRapor()">' + opsiKelas() + '</select>' +
+              '<div class="letter-btns" id="rMode">' +
+                '<button data-m="auto" class="on">⚙️ Otomatis dari Tugas</button>' +
+                '<button data-m="manual">✏️ Input Manual</button>' +
+              '</div>' +
+            '</div>' +
+            '<div id="rTabel" style="margin-top:16px"><div class="empty small">Pilih kelas untuk mulai.</div></div></div>' +
 
             '<div class="panel" style="margin-top:16px"><div class="section-title">⚙️ Bobot Nilai</div>' +
             '<div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">' +
@@ -475,12 +531,116 @@
               '<div><label class="f">Praktik %</label><input class="input" style="width:96px" type="number" id="bP" min="0" max="100" value="' + m.bobotPraktik + '"></div>' +
               '<div><label class="f">Project %</label><input class="input" style="width:96px" type="number" id="bJ" min="0" max="100" value="' + m.bobotProject + '"></div>' +
               '<button class="btn btn-primary" onclick="simpanBobotRapor()">Simpan bobot</button>' +
-            '</div><p class="small muted" style="margin-top:8px">Total harus = 100%.</p></div>'
+            '</div><p class="small muted" style="margin-top:8px">Total harus = 100%. Bobot ini juga dipakai untuk akumulasi otomatis.</p></div>'
           : ''));
+
+        if(m) $all('#rMode button').forEach(function(b){
+          b.onclick = function(){
+            $all('#rMode button').forEach(function(x){ x.classList.toggle('on', x === b); });
+            _modeRapor = b.dataset.m;
+            muatRapor();
+          };
+        });
       }).catch(function(e){ setView(errBox(e)); });
     }
 
-    function muatNilaiKelas(kelas){
+    var _modeRapor = 'auto';
+    function muatRapor(){
+      var kelas = $('#rKelas') && $('#rKelas').value;
+      if(!kelas || !_mapelRapor){ if($('#rTabel')) $('#rTabel').innerHTML = '<div class="empty small">Pilih kelas dulu.</div>'; return; }
+      if(_modeRapor === 'manual') muatNilaiKelas(kelas);
+      else muatRekapKategori(kelas);
+    }
+
+    // ---- Rekap otomatis: akumulasi nilai tugas per kategori (poin 3/5/6) ----
+    var _rekapKat = null;
+    function muatRekapKategori(kelas){
+      var box = $('#rTabel');
+      box.innerHTML = '<div class="loading"><div class="spinner"></div>Menghitung akumulasi…</div>';
+      grun('getRekapKategoriKelas', kelas).then(function(d){
+        _rekapKat = d;
+        if(!d || !d.siswa.length){ box.innerHTML = '<div class="empty small">Tidak ada data.</div>'; return; }
+        var jt = d.jumlahTugas;
+        var rows = d.siswa.map(function(r){
+          function cell(v){ return v == null ? '<span class="muted">–</span>' : v; }
+          return '<tr>' +
+            '<td>' + esc(r.nis) + '</td><td>' + esc(r.nama) + '</td>' +
+            '<td>' + cell(r.harian) + '</td><td>' + cell(r.praktik) + '</td><td>' + cell(r.project) + '</td>' +
+            '<td style="font-weight:800">' + (r.nilaiAkhir == null ? '–'
+              : r.nilaiAkhir + ' <span class="small muted">' + (r.nilaiHuruf || '') + '</span>') +
+              (r.lengkap ? '' : ' <span class="tag" title="Sebagian kategori belum ada nilai">parsial</span>') + '</td>' +
+            '<td><button class="btn btn-ghost btn-sm" data-rinci="' + esc(r.nis) + '">Rincian ▾</button></td>' +
+          '</tr>' +
+          '<tr id="rinci_' + esc(r.nis) + '" hidden><td colspan="7" style="background:var(--panel-2)">' + rinciHtml(r) + '</td></tr>';
+        }).join('');
+
+        box.innerHTML =
+          '<div class="card-flat" style="margin-bottom:12px"><b>Akumulasi nilai dari tugas</b> — ' +
+            'Harian ' + jt.Harian + ' tugas · Praktik ' + jt.Praktik + ' · Project ' + jt.Project + '. ' +
+            'Nilai tiap kategori = rata-rata nilai tugas kategori tsb yang sudah dinilai. ' +
+            'Nilai akhir memakai bobot mapel (kategori tanpa nilai tidak dihitung).</div>' +
+          '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">' +
+            '<button class="btn btn-ghost btn-sm" onclick="rekapKeManual()">✏️ Kirim ke Input Manual (tinjau dulu)</button>' +
+            '<button class="btn btn-primary btn-sm" onclick="terapkanRekap()">💾 Simpan semua ke rapor</button>' +
+          '</div>' +
+          '<div class="tbl-wrap"><table class="tbl"><thead><tr>' +
+            '<th>NIS</th><th>Nama</th><th>Harian</th><th>Praktik</th><th>Project</th><th>Nilai Akhir</th><th></th>' +
+          '</tr></thead><tbody>' + rows + '</tbody></table></div>';
+
+        $all('[data-rinci]').forEach(function(b){
+          b.onclick = function(){
+            var tr = document.getElementById('rinci_' + b.dataset.rinci);
+            tr.hidden = !tr.hidden;
+            b.textContent = tr.hidden ? 'Rincian ▾' : 'Rincian ▴';
+          };
+        });
+      }).catch(function(e){ box.innerHTML = errBox(e); });
+    }
+
+    function rinciHtml(r){
+      return ['Harian','Praktik','Project'].map(function(kat){
+        var list = (r.rincian[kat] && r.rincian[kat].rincian) || [];
+        if(!list.length) return '<div class="small muted" style="padding:6px 0">' + kat + ': belum ada tugas</div>';
+        return '<div style="padding:8px 0"><b>' + kat + '</b> <span class="small muted">(rata: ' +
+          (r[kat.toLowerCase()] == null ? '–' : r[kat.toLowerCase()]) + ')</span>' +
+          list.map(function(x){
+            return '<div class="small" style="display:flex;justify-content:space-between;gap:10px;padding:2px 0">' +
+              '<span>' + esc(x.judul) + '</span>' +
+              '<span>' + (x.nilai == null
+                ? '<span class="muted">' + esc(x.status) + '</span>'
+                : '<b>' + x.nilai + '</b>' + (x.nilaiHuruf ? ' (' + esc(x.nilaiHuruf) + ')' : '')) + '</span></div>';
+          }).join('') + '</div>';
+      }).join('');
+    }
+
+    function rekapKeManual(){
+      if(!_rekapKat) return;
+      _modeRapor = 'manual';
+      $all('#rMode button').forEach(function(x){ x.classList.toggle('on', x.dataset.m === 'manual'); });
+      muatNilaiKelas($('#rKelas').value, function(){
+        _rekapKat.siswa.forEach(function(r){
+          if(r.harian != null && $('#h_' + r.nis)) $('#h_' + r.nis).value = r.harian;
+          if(r.praktik != null && $('#p_' + r.nis)) $('#p_' + r.nis).value = r.praktik;
+          if(r.project != null && $('#j_' + r.nis)) $('#j_' + r.nis).value = r.project;
+          if($('#h_' + r.nis)) hitRapor(r.nis);
+        });
+        toast('Nilai otomatis diisi ke form. Tinjau, lalu Simpan per baris.', 'ok');
+      });
+    }
+
+    function terapkanRekap(){
+      if(!_rekapKat) return;
+      var pakai = _rekapKat.siswa.filter(function(r){ return r.nilaiAkhir != null; });
+      if(!pakai.length) return toast('Belum ada nilai untuk diterapkan', 'err');
+      if(!confirm('Simpan ' + pakai.length + ' nilai hasil akumulasi ke rapor? Nilai lama untuk siswa tsb akan ditimpa.')) return;
+      grun('terapkanRekapKategori', _rekapKat.kelas, pakai.map(function(r){
+        return { nis: r.nis, nama: r.nama, harian: r.harian, praktik: r.praktik, project: r.project };
+      })).then(function(res){
+        toast(res.pesan || (res.jumlah + ' nilai diterapkan'), res.sukses ? 'ok' : 'err');
+      }).catch(function(e){ toast(e.message, 'err'); });
+    }
+
+    function muatNilaiKelas(kelas, selesai){
       if(!kelas || !_mapelRapor) return;
       var box = $('#rTabel');
       box.innerHTML = '<div class="loading"><div class="spinner"></div>Memuat…</div>';
@@ -502,6 +662,7 @@
           box.innerHTML = '<div class="tbl-wrap"><table class="tbl"><thead><tr>' +
             '<th>#</th><th>NIS</th><th>Nama</th><th>Harian</th><th>Praktik</th><th>Project</th><th>Akhir</th><th>Status</th><th></th>' +
             '</tr></thead><tbody>' + rows + '</tbody></table></div>';
+          if(typeof selesai === 'function') selesai();
         });
       }).catch(function(e){ box.innerHTML = errBox(e); });
     }

@@ -22,7 +22,8 @@ function _itemTugasSiswa(siswa) {
         tugas: {
           id: t.ID, judul: t.Judul, deskripsi: t.Deskripsi, kelas: t.Kelas,
           deadline: toIso(t.Deadline), tglDibuat: toIso(t.TglDibuat),
-          jenisPenilaian: t.JenisPenilaian, lampiranUrl: t.LampiranMateriURL
+          jenisPenilaian: t.JenisPenilaian, lampiranUrl: t.LampiranMateriURL,
+          kategori: t.Kategori || 'Harian'
         },
         submission: normalisasiSubmission(raw)
       };
@@ -48,6 +49,7 @@ function _kartuTugas(it) {
     deskripsi: it.tugas.deskripsi,
     deadline: it.tugas.deadline,
     tglDibuat: it.tugas.tglDibuat,
+    kategori: it.tugas.kategori,
     jenisPenilaian: it.tugas.jenisPenilaian,
     adaLampiranMateri: !!it.tugas.lampiranUrl,
     statusRoadmap: _statusRoadmap(it),
@@ -119,6 +121,9 @@ function getDetailTugasSiswa(token, tugasId) {
       id: t.ID, judul: t.Judul, deskripsi: t.Deskripsi, kelas: t.Kelas,
       deadline: toIso(t.Deadline), tglDibuat: toIso(t.TglDibuat),
       jenisPenilaian: t.JenisPenilaian, lampiranMateri: lampiranMateri,
+      kategori: t.Kategori || 'Harian',
+      jenisFile: _jenisFileArr(t.JenisFile),
+      izinFileLabel: labelIzinFile(_jenisFileArr(t.JenisFile)),
       lewatDeadline: t.Deadline && new Date(t.Deadline) < new Date()
     },
     submission: s,

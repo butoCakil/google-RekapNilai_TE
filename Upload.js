@@ -31,9 +31,13 @@ function _uploadBase64(tugas, siswa, files, diuploadOleh) {
     if (!files || !files.length) return { sukses: false, pesan: 'Tidak ada berkas' };
 
     const folder = getFolderTugas(tugas.ID, tugas.Judul);
+    const izinFile = _jenisFileArr(tugas.JenisFile);
     const dibuat = [];
     files.forEach(function (f) {
       if (!f.base64 || !f.nama) throw new Error('Berkas tidak lengkap');
+      if (!fileTipeCocok(f.nama, f.mime, izinFile)) {
+        throw new Error('Berkas "' + f.nama + '" tidak sesuai. Yang diizinkan: ' + labelIzinFile(izinFile));
+      }
       const bytes = Utilities.base64Decode(f.base64);
       if (bytes.length > BATAS_BASE64_MB * 1024 * 1024) {
         throw new Error('Berkas "' + f.nama + '" terlalu besar untuk jalur ini (maks ' +

@@ -15,7 +15,8 @@ const SKEMA_SHEET = {
   Tugas: {
     id: CONFIG.REKAP_SPREADSHEET_ID,
     kolom: ['ID', 'Judul', 'Deskripsi', 'Kelas', 'Deadline', 'GuruPembuat',
-            'LampiranMateriURL', 'JenisPenilaian', 'TglDibuat', 'Status']
+            'LampiranMateriURL', 'JenisPenilaian', 'TglDibuat', 'Status',
+            'Kategori', 'JenisFile']
   },
   Submission: {
     id: CONFIG.REKAP_SPREADSHEET_ID,
@@ -66,23 +67,7 @@ function setupSheetConfig() {
     catatan.push('Sheet Config: sudah ada.');
   }
 
-  // Migrasi key gamifikasi (tambah kalau belum ada)
-  const data = sheet.getDataRange().getValues();
-  const keyAda = {};
-  for (let i = 1; i < data.length; i++) keyAda[data[i][0] + '|' + data[i][1]] = true;
-
-  const gamifikasiDefault = [
-    ['GAMIFIKASI_BADGE', 'starter|Upload Pertama|1', 'badge: id|nama|min tugas terkumpul'],
-    ['GAMIFIKASI_BADGE', 'rajin|Rajin|5', 'badge: id|nama|min tugas terkumpul'],
-    ['GAMIFIKASI_BADGE', 'tekun|Tekun|10', 'badge: id|nama|min tugas terkumpul'],
-    ['GAMIFIKASI_BADGE', 'juara|Juara Kelas|1', 'badge khusus: rata-rata nilai >= 90'],
-  ];
-  let ditambah = 0;
-  gamifikasiDefault.forEach(function (row) {
-    if (!keyAda[row[0] + '|' + row[1]]) { sheet.appendRow(row); ditambah++; }
-  });
-  if (ditambah) catatan.push('Sheet Config: +' + ditambah + ' baris gamifikasi.');
-
+  // Sejak versi ini, daftar lencana ada di kode (Gamifikasi.js), bukan di Config.
   return catatan.join(' ');
 }
 

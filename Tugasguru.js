@@ -3,6 +3,16 @@
 // ================================================
 // KELOLA TUGAS
 // ================================================
+function _bersihkanKategori(k) {
+  return KATEGORI_TUGAS.indexOf(k) >= 0 ? k : 'Harian';
+}
+function _bersihkanJenisFile(arr) {
+  if (!arr || !arr.length) return 'semua';
+  if (arr.indexOf('semua') >= 0) return 'semua';
+  const valid = arr.filter(function (k) { return !!TIPE_FILE[k]; });
+  return valid.length ? valid.join(',') : 'semua';
+}
+
 function buatTugas(payload) {
   try {
     const guru = getUserInfo();
@@ -22,7 +32,9 @@ function buatTugas(payload) {
       LampiranMateriURL: payload.lampiranUrl || '',
       JenisPenilaian: payload.jenisPenilaian === 'huruf' ? 'huruf' : 'angka',
       TglDibuat: new Date(),
-      Status: STATUS_TUGAS.AKTIF
+      Status: STATUS_TUGAS.AKTIF,
+      Kategori: _bersihkanKategori(payload.kategori),
+      JenisFile: _bersihkanJenisFile(payload.jenisFile)
     });
 
     kirimNotifikasiKeKelas(payload.kelas, 'tugas_baru', 'Tugas baru: ' + payload.judul, id);
@@ -48,7 +60,9 @@ function editTugas(payload) {
       Kelas: payload.kelas,
       Deadline: new Date(payload.deadline),
       LampiranMateriURL: payload.lampiranUrl || '',
-      JenisPenilaian: payload.jenisPenilaian === 'huruf' ? 'huruf' : 'angka'
+      JenisPenilaian: payload.jenisPenilaian === 'huruf' ? 'huruf' : 'angka',
+      Kategori: _bersihkanKategori(payload.kategori),
+      JenisFile: _bersihkanJenisFile(payload.jenisFile)
     });
     return { sukses: true, pesan: 'Tugas berhasil diperbarui' };
   } catch (e) {
@@ -117,6 +131,8 @@ function getDaftarTugasGuru() {
         deadline: toIso(t.Deadline),
         tglDibuat: toIso(t.TglDibuat),
         jenisPenilaian: t.JenisPenilaian,
+        kategori: t.Kategori || 'Harian',
+        jenisFile: _jenisFileArr(t.JenisFile),
         lampiranUrl: t.LampiranMateriURL,
         status: t.Status || STATUS_TUGAS.AKTIF,
         totalSiswa: totalSiswa,
@@ -202,6 +218,7 @@ function getRekapTugas(tugasId) {
     tugas: {
       id: t.ID, judul: t.Judul, deskripsi: t.Deskripsi, kelas: t.Kelas,
       deadline: toIso(t.Deadline), jenisPenilaian: t.JenisPenilaian,
+      kategori: t.Kategori || 'Harian', jenisFile: _jenisFileArr(t.JenisFile),
       lampiranUrl: t.LampiranMateriURL, status: t.Status || STATUS_TUGAS.AKTIF
     },
     konversi: getKonversiNilai(),
@@ -300,7 +317,7 @@ function getPemantauan(kelas) {
   const rekapSiswa = siswaKelas.map(function (s) {
     const items = tugasKelas.map(function (t) {
       const raw = sub.find(function (x) { return x.TugasID === t.ID && String(x.NIS) === String(s.nis); });
-      return { tugas: { deadline: toIso(t.Deadline) }, submission: normalisasiSubmission(raw) };
+      return { tugas: { deadline: toIso(t.Deadline), tglDibuat: toIso(t.TglDibuat) }, submission: normalisasiSubmission(raw) };
     });
     const g = hitungGamifikasi(items);
     return {
@@ -334,4 +351,91 @@ function getPemantauan(kelas) {
     nilaiTertinggi: byNilai.slice().sort(function (a, b) { return b.rataNilai - a.rataNilai; }).slice(0, 5),
     nilaiTerendah: byNilai.slice().sort(function (a, b) { return a.rataNilai - b.rataNilai; }).slice(0, 5)
   };
+}
+
+// ================================================
+// REKAP NILAI TERINTEGRASI (akumulasi nilai tugas per kategori -> nilai rapor)
+// ================================================
+function getRekapKategoriKelas(kelas) {
+  const guru = getUserInfo();
+  if (!guru) return null;
+
+  const mapel = getMapelGuru(guru.nip);
+  const bobot = mapel
+    ? { Harian: Number(mapel.bobotHarian) || 0, Praktik: Number(mapel.bobotPraktik) || 0, Project: Number(mapel.bobotProject) || 0 }
+    : { Harian: 40, Praktik: 40, Project: 20 };
+
+  const tugasKelas = getSemuaTugas().filter(function (t) {
+    return String(t.GuruPembuat) === String(guru.nip) && t.Kelas === kelas;
+  });
+  const sub = getSemuaSubmission();
+  const siswaKelas = getDataSiswaByKelas(kelas);
+
+  const siswa = siswaKelas.map(function (s) {
+    const perKat = {};
+    KATEGORI_TUGAS.forEach(function (k) { perKat[k] = { nilai: [], rincian: [] }; });
+
+    tugasKelas.forEach(function (t) {
+      const kat = KATEGORI_TUGAS.indexOf(t.Kategori) >= 0 ? t.Kategori : 'Harian';
+      const n = normalisasiSubmission(sub.find(function (x) {
+        return x.TugasID === t.ID && String(x.NIS) === String(s.nis);
+      }));
+      const nilai = (n && n.status === STATUS_SUBMISSION.DINILAI && n.nilaiAngka !== null) ? n.nilaiAngka : null;
+      perKat[kat].rincian.push({
+        judul: t.Judul, tugasId: t.ID,
+        status: n ? n.status : 'Belum Upload',
+        nilai: nilai, nilaiHuruf: n ? n.nilaiHuruf : null
+      });
+      if (nilai !== null) perKat[kat].nilai.push(nilai);
+    });
+
+    const rata = {};
+    KATEGORI_TUGAS.forEach(function (k) {
+      const arr = perKat[k].nilai;
+      rata[k] = arr.length ? Math.round((arr.reduce(function (a, b) { return a + b; }, 0) / arr.length) * 100) / 100 : null;
+    });
+
+    let totalBobot = 0, akum = 0;
+    KATEGORI_TUGAS.forEach(function (k) {
+      if (rata[k] !== null) { totalBobot += bobot[k]; akum += rata[k] * bobot[k]; }
+    });
+    const nilaiAkhir = totalBobot > 0 ? Math.round((akum / totalBobot) * 100) / 100 : null;
+
+    return {
+      nis: String(s.nis), nama: s.nama,
+      harian: rata.Harian, praktik: rata.Praktik, project: rata.Project,
+      nilaiAkhir: nilaiAkhir,
+      nilaiHuruf: nilaiAkhir !== null ? angkaKeHuruf(nilaiAkhir) : null,
+      lengkap: totalBobot === (bobot.Harian + bobot.Praktik + bobot.Project),
+      rincian: perKat
+    };
+  });
+
+  return {
+    kelas: kelas,
+    mapel: mapel ? { kode: mapel.kode, nama: mapel.nama } : null,
+    bobot: bobot,
+    jumlahTugas: {
+      Harian: tugasKelas.filter(function (t) { return (t.Kategori || 'Harian') === 'Harian'; }).length,
+      Praktik: tugasKelas.filter(function (t) { return t.Kategori === 'Praktik'; }).length,
+      Project: tugasKelas.filter(function (t) { return t.Kategori === 'Project'; }).length
+    },
+    siswa: siswa
+  };
+}
+
+// Terapkan hasil akumulasi ke sheet Nilai_<KODE>. Hanya baris yang dikirim klien
+// (guru sudah meninjau). Setiap baris: { nis, nama, harian, praktik, project }.
+function terapkanRekapKategori(kelas, daftar) {
+  const guru = getUserInfo();
+  if (!guru) return { sukses: false, pesan: 'Akses ditolak' };
+  let ok = 0, gagal = 0;
+  (daftar || []).forEach(function (r) {
+    const res = simpanNilai({
+      nis: r.nis, nama: r.nama, kelas: kelas,
+      harian: r.harian || 0, praktik: r.praktik || 0, project: r.project || 0
+    });
+    if (res.sukses) ok++; else gagal++;
+  });
+  return { sukses: gagal === 0, pesan: ok + ' nilai diterapkan' + (gagal ? ', ' + gagal + ' gagal' : ''), jumlah: ok };
 }

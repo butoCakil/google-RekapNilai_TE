@@ -33,3 +33,11 @@ function getNisDariToken(token) {
   const nis = CacheService.getScriptCache().get('sesi_' + token);
   return nis || null;
 }
+
+// Batalkan token sesi -> tautan lama (?page=tugas&token=...) tidak bisa dipakai lagi.
+function logoutSiswaTugas(token) {
+  try {
+    if (token) CacheService.getScriptCache().remove('sesi_' + token);
+  } catch (e) {}
+  return true;
+}

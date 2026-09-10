@@ -14,6 +14,42 @@ const STATUS_TUGAS = {
   ARSIP  : 'Arsip'
 };
 
+const KATEGORI_TUGAS = ['Harian', 'Praktik', 'Project'];
+
+// Definisi jenis berkas yang boleh diunggah (dipakai validasi guru & siswa)
+const TIPE_FILE = {
+  gambar: { label: 'Gambar', mime: /^image\//i,                              ext: /\.(jpe?g|png|gif|webp|bmp|heic|heif|tiff?)$/i },
+  pdf   : { label: 'PDF',    mime: /pdf/i,                                    ext: /\.pdf$/i },
+  word  : { label: 'Word',   mime: /(msword|wordprocessingml|opendocument\.text)/i, ext: /\.(docx?|odt|rtf)$/i },
+  excel : { label: 'Excel',  mime: /(ms-?excel|spreadsheetml|opendocument\.spreadsheet)/i, ext: /\.(xlsx?|ods|csv)$/i },
+  ppt   : { label: 'PowerPoint', mime: /(ms-?powerpoint|presentationml|opendocument\.presentation)/i, ext: /\.(pptx?|odp)$/i },
+  teks  : { label: 'Teks',   mime: /^text\//i,                               ext: /\.(txt|md|log)$/i },
+  video : { label: 'Video',  mime: /^video\//i,                              ext: /\.(mp4|mov|avi|mkv|webm|3gp|flv|wmv)$/i },
+  audio : { label: 'Audio',  mime: /^audio\//i,                              ext: /\.(mp3|wav|ogg|m4a|aac|flac)$/i }
+};
+
+// izin: array kunci TIPE_FILE, atau ['semua'] / kosong = bebas
+function fileTipeCocok(namaFile, mime, izin) {
+  if (!izin || !izin.length || izin.indexOf('semua') >= 0) return true;
+  for (let i = 0; i < izin.length; i++) {
+    const t = TIPE_FILE[izin[i]];
+    if (!t) continue;
+    if ((mime && t.mime.test(mime)) || (namaFile && t.ext.test(namaFile))) return true;
+  }
+  return false;
+}
+
+// String CSV dari sheet -> array kunci; kosong/'semua' -> ['semua']
+function _jenisFileArr(val) {
+  if (!val || String(val).toLowerCase() === 'semua') return ['semua'];
+  return String(val).split(',').map(function (s) { return s.trim(); }).filter(function (s) { return !!TIPE_FILE[s]; });
+}
+
+function labelIzinFile(izin) {
+  if (!izin || !izin.length || izin.indexOf('semua') >= 0) return 'Semua jenis berkas';
+  return izin.map(function (k) { return TIPE_FILE[k] ? TIPE_FILE[k].label : k; }).join(', ');
+}
+
 function buatId(prefix) {
   const waktu = new Date().getTime();
   const acak = Math.floor(Math.random() * 1000);

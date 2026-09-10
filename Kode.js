@@ -111,6 +111,15 @@ function doGet(e) {
         .addMetaTag('viewport', 'width=device-width, initial-scale=1');
     }
 
+    case 'keluar': {
+      if (e.parameter.token) logoutSiswaTugas(e.parameter.token);
+      const t = HtmlService.createTemplateFromFile('Keluar');
+      t.scriptUrl = getScriptUrl();
+      return t.evaluate()
+        .setTitle('Keluar - RekapNilai TE')
+        .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+    }
+
     // ---------- LEGACY: REKAP NILAI ----------
     case 'dashboard': {
       if (!getCurrentUser()) return redirectTo('index');

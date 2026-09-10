@@ -73,6 +73,35 @@ function angkaKeHurufKlien(n){
   return '';
 }
 
+/* --- Validasi jenis berkas (harus sinkron dgn Util.js TIPE_FILE) --- */
+var TIPE_FILE = {
+  gambar: { label:'Gambar',     mime:/^image\//i,                            ext:/\.(jpe?g|png|gif|webp|bmp|heic|heif|tiff?)$/i },
+  pdf   : { label:'PDF',        mime:/pdf/i,                                  ext:/\.pdf$/i },
+  word  : { label:'Word',       mime:/(msword|wordprocessingml|opendocument\.text)/i, ext:/\.(docx?|odt|rtf)$/i },
+  excel : { label:'Excel',      mime:/(ms-?excel|spreadsheetml|opendocument\.spreadsheet)/i, ext:/\.(xlsx?|ods|csv)$/i },
+  ppt   : { label:'PowerPoint', mime:/(ms-?powerpoint|presentationml|opendocument\.presentation)/i, ext:/\.(pptx?|odp)$/i },
+  teks  : { label:'Teks',       mime:/^text\//i,                             ext:/\.(txt|md|log)$/i },
+  video : { label:'Video',      mime:/^video\//i,                            ext:/\.(mp4|mov|avi|mkv|webm|3gp|flv|wmv)$/i },
+  audio : { label:'Audio',      mime:/^audio\//i,                            ext:/\.(mp3|wav|ogg|m4a|aac|flac)$/i }
+};
+function fileCocok(file, izin){
+  if(!izin || !izin.length || izin.indexOf('semua') >= 0) return true;
+  return izin.some(function(k){
+    var t = TIPE_FILE[k]; if(!t) return false;
+    return t.mime.test(file.type || '') || t.ext.test(file.name || '');
+  });
+}
+function labelIzin(izin){
+  if(!izin || !izin.length || izin.indexOf('semua') >= 0) return 'Semua jenis berkas';
+  return izin.map(function(k){ return TIPE_FILE[k] ? TIPE_FILE[k].label : k; }).join(', ');
+}
+function acceptAttr(izin){
+  if(!izin || !izin.length || izin.indexOf('semua') >= 0) return '';
+  var map = { gambar:'image/*', pdf:'.pdf,application/pdf', word:'.doc,.docx', excel:'.xls,.xlsx,.csv',
+    ppt:'.ppt,.pptx', teks:'.txt,text/plain', video:'video/*', audio:'audio/*' };
+  return izin.map(function(k){ return map[k] || ''; }).filter(Boolean).join(',');
+}
+
 /* ============================================================
    UPLOAD BERKAS
    - Coba resumable upload langsung ke Drive (file besar/video).

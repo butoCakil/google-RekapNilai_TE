@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Cache-Control" content="no-store, must-revalidate">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <?!= include('AppCSS') ?>
+  <style>
+    body{display:grid;place-items:center;min-height:100vh;padding:24px}
+    .box{width:100%;max-width:400px;background:var(--panel);border-radius:var(--r-lg);
+      box-shadow:var(--sh-lg);padding:36px 30px;text-align:center}
+    .ic{font-size:44px}
+    h1{font-size:20px;font-weight:800;margin:10px 0 4px}
+    p{color:var(--ink-soft);font-size:13.5px;margin:0 0 22px}
+    .btn{width:100%;justify-content:center}
+    .gout{display:inline-block;margin-top:14px;font-size:12.5px;color:var(--ink-soft);text-decoration:underline}
+  </style>
+</head>
+<body>
+  <div class="box">
+    <div class="ic">👋</div>
+    <h1>Anda sudah keluar</h1>
+    <p>Sesi portal telah diakhiri. Terima kasih.</p>
+    <a class="btn btn-primary" href="<?= scriptUrl ?>">Kembali ke Beranda</a>
+    <br>
+    <a class="gout" href="https://accounts.google.com/Logout" target="_blank" rel="noopener">
+      Keluar juga dari akun Google (semua layanan)
+    </a>
+  </div>
+  <script>
+    // Kalau halaman ini dibuka dari cache tombol "back", tetap paksa ke beranda.
+    window.addEventListener('pageshow', function (e) {
+      if (e.persisted) location.href = '<?= scriptUrl ?>';
+    });
+  </script>
+</body>
+</html>

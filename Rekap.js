@@ -62,11 +62,18 @@ function buatRekapSpreadsheet(payload) {
     } else if (payload.mode === 'kelas') {
       judulFile = 'Rekap Kelas ' + payload.kelas + ' - ' + stamp;
       blok.push(_blokRekapKelas(getRekapKelas(payload.kelas)));
+      blok.push(_blokRincianKategori(getRekapKategoriKelas(payload.kelas)));
+    } else if (payload.mode === 'kategori') {
+      judulFile = 'Rincian Kategori ' + payload.kelas + ' - ' + stamp;
+      blok.push(_blokRincianKategori(getRekapKategoriKelas(payload.kelas)));
     } else {
       judulFile = 'Rekap Semua Kelas - ' + stamp;
       CONFIG.KELAS.forEach(function (k) {
         const rk = getRekapKelas(k);
-        if (rk && rk.tugas.length) blok.push(_blokRekapKelas(rk));
+        if (rk && rk.tugas.length) {
+          blok.push(_blokRekapKelas(rk));
+          blok.push(_blokRincianKategori(getRekapKategoriKelas(k)));
+        }
       });
       if (!blok.length) return { sukses: false, pesan: 'Belum ada tugas untuk direkap' };
     }
@@ -127,6 +134,48 @@ function _blokRekapKelas(rk) {
     })).concat([r.rata === null ? '' : r.rata]);
   });
   return { judul: 'Kelas ' + rk.kelas, header: header, rows: rows, meta: rk.tugas.length + ' tugas' };
+}
+
+// Rincian akumulasi per kategori (poin 6): tiap tugas jadi kolom, dikelompokkan kategori
+function _blokRincianKategori(rk) {
+  if (!rk) return { judul: 'Rincian Kategori', header: ['(tidak ada data)'], rows: [], meta: '' };
+
+  // kumpulkan judul tugas per kategori dari siswa pertama (semua siswa punya set tugas sama)
+  const contoh = rk.siswa[0];
+  const kolomTugas = {};
+  KATEGORI_TUGAS.forEach(function (kat) {
+    kolomTugas[kat] = contoh && contoh.rincian[kat]
+      ? contoh.rincian[kat].rincian.map(function (x) { return { judul: x.judul, tugasId: x.tugasId }; })
+      : [];
+  });
+
+  const header = ['NIS', 'Nama'];
+  KATEGORI_TUGAS.forEach(function (kat) {
+    kolomTugas[kat].forEach(function (t) { header.push(kat.charAt(0) + '· ' + t.judul); });
+    header.push('RATA ' + kat.toUpperCase());
+  });
+  header.push('NILAI AKHIR');
+
+  const rows = rk.siswa.map(function (s) {
+    const row = [s.nis, s.nama];
+    KATEGORI_TUGAS.forEach(function (kat) {
+      const rinci = (s.rincian[kat] && s.rincian[kat].rincian) || [];
+      kolomTugas[kat].forEach(function (t) {
+        const found = rinci.filter(function (x) { return x.tugasId === t.tugasId; })[0];
+        row.push(found && found.nilai !== null ? found.nilai : (found ? found.status : ''));
+      });
+      row.push(s[kat.toLowerCase()] === null || s[kat.toLowerCase()] === undefined ? '' : s[kat.toLowerCase()]);
+    });
+    row.push(s.nilaiAkhir === null ? '' : s.nilaiAkhir);
+    return row;
+  });
+
+  const b = rk.bobot;
+  return {
+    judul: 'Rincian Kategori ' + rk.kelas,
+    header: header, rows: rows,
+    meta: (rk.mapel ? rk.mapel.nama + ' | ' : '') + 'Bobot H:' + b.Harian + ' P:' + b.Praktik + ' Pr:' + b.Project
+  };
 }
 
 function _tulisBlok(sheet, b) {
