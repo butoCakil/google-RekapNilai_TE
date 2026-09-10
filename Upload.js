@@ -1,91 +1,53 @@
-// Upload.js - Terima file dari siswa, simpan ke Drive, catat/perbarui Submission
-//
-// Catatan penting: karena executeAs = USER_DEPLOYING, semua penulisan Drive/Sheet
-// di sini pakai izin akun Anda - jadi selalu berhasil apa pun status login siswa.
-// Semua file tugas akan masuk ke folder milik Anda (root Drive Anda).
-//
-// Peringatan praktis: untuk file besar (terutama video), base64 encoding di browser
-// bisa lambat/berat, dan Apps Script Web App punya batas ukuran request (~50MB).
-// Kalau nanti banyak siswa upload video besar, mungkin perlu strategi lain
-// (kompresi di sisi klien, atau upload langsung ke Drive lewat picker) - belum
-// ditangani di versi ini, cukup untuk gambar/PDF/Word/Text dulu.
+// Upload.js - Jalur upload file KECIL lewat base64 (fallback).
+// Untuk file besar/video, klien memakai resumable upload (lihat DriveUpload.js).
+// Batas praktis jalur ini: ~30-40MB setelah base64 (limit request Apps Script ~50MB).
 
-function uploadTugas(payload) {
+const BATAS_BASE64_MB = 35;
+
+// payload: { token, tugasId, files: [{ base64, nama, mime }] }  (siswa)
+function uploadTugasKecil(payload) {
+  const nis = getNisDariToken(payload.token);
+  if (!nis) return { sukses: false, pesan: 'Sesi kedaluwarsa, login ulang' };
+  const siswa = getSiswaByNis(nis);
+  const tugas = getTugasById(payload.tugasId);
+  if (!siswa || !tugas) return { sukses: false, pesan: 'Data tidak valid' };
+  if (tugas.Kelas !== siswa.kelas) return { sukses: false, pesan: 'Tugas bukan untuk kelas Anda' };
+  return _uploadBase64(tugas, siswa, payload.files, 'siswa');
+}
+
+// payload: { tugasId, nis, files: [{ base64, nama, mime }] }  (guru atas nama siswa)
+function uploadTugasKecilOlehGuru(payload) {
+  const guru = getUserInfo();
+  if (!guru) return { sukses: false, pesan: 'Akses ditolak' };
+  const siswa = getSiswaByNis(payload.nis);
+  const tugas = getTugasById(payload.tugasId);
+  if (!siswa || !tugas) return { sukses: false, pesan: 'Data tidak valid' };
+  if (siswa.kelas !== tugas.Kelas) return { sukses: false, pesan: 'Siswa tidak di kelas tugas ini' };
+  return _uploadBase64(tugas, siswa, payload.files, 'guru:' + guru.nama);
+}
+
+function _uploadBase64(tugas, siswa, files, diuploadOleh) {
   try {
-    const siswa = getSiswaByNis(payload.nis);
-    if (!siswa) return { sukses: false, pesan: 'NIS tidak valid' };
+    if (!files || !files.length) return { sukses: false, pesan: 'Tidak ada berkas' };
 
-    const rekap = SpreadsheetApp.openById(CONFIG.REKAP_SPREADSHEET_ID);
-    const dataTugas = rekap.getSheetByName('Tugas').getDataRange().getValues();
-
-    let tugasValid = false, judulTugas = '';
-    for (let i = 1; i < dataTugas.length; i++) {
-      if (dataTugas[i][0] === payload.tugasId) {
-        if (dataTugas[i][3] !== siswa.kelas) {
-          return { sukses: false, pesan: 'Tugas ini bukan untuk kelas Anda' };
-        }
-        tugasValid = true;
-        judulTugas = dataTugas[i][1];
-        break;
+    const folder = getFolderTugas(tugas.ID, tugas.Judul);
+    const dibuat = [];
+    files.forEach(function (f) {
+      if (!f.base64 || !f.nama) throw new Error('Berkas tidak lengkap');
+      const bytes = Utilities.base64Decode(f.base64);
+      if (bytes.length > BATAS_BASE64_MB * 1024 * 1024) {
+        throw new Error('Berkas "' + f.nama + '" terlalu besar untuk jalur ini (maks ' +
+          BATAS_BASE64_MB + 'MB). Gunakan upload biasa.');
       }
-    }
-    if (!tugasValid) return { sukses: false, pesan: 'Tugas tidak ditemukan' };
+      const blob = Utilities.newBlob(bytes, f.mime || 'application/octet-stream',
+        String(siswa.nis) + '_' + siswa.nama + '_' + f.nama);
+      const file = folder.createFile(blob);
+      dibuat.push({ id: file.getId(), nama: file.getName(), mime: file.getMimeType(), size: file.getSize() });
+    });
 
-    if (!payload.fileBase64 || !payload.fileName) {
-      return { sukses: false, pesan: 'File wajib diunggah' };
-    }
-
-    const folder = getFolderTugas(payload.tugasId, judulTugas);
-    const blob = Utilities.newBlob(
-      Utilities.base64Decode(payload.fileBase64),
-      payload.mimeType || 'application/octet-stream',
-      payload.nis + '_' + siswa.nama + '_' + payload.fileName
-    );
-    const file = folder.createFile(blob);
-
-    const sheet = rekap.getSheetByName('Submission');
-    const data  = sheet.getDataRange().getValues();
-
-    let rowIndex = -1;
-    for (let i = 1; i < data.length; i++) {
-      if (data[i][1] === payload.tugasId && String(data[i][2]) === String(payload.nis)) {
-        rowIndex = i + 1;
-        break;
-      }
-    }
-
-    // Upload baru ATAU upload ulang (misal setelah diminta revisi) -> reset kolom nilai
-    const rowData = [
-      rowIndex > 0 ? data[rowIndex - 1][0] : buatId('SUB'),
-      payload.tugasId, payload.nis, siswa.nama, siswa.kelas,
-      file.getUrl(), file.getId(), new Date(), STATUS_SUBMISSION.MENUNGGU,
-      '', '', '', '', ''
-    ];
-
-    if (rowIndex > 0) {
-      sheet.getRange(rowIndex, 1, 1, rowData.length).setValues([rowData]);
-    } else {
-      sheet.appendRow(rowData);
-    }
-
-    kirimNotifikasiKeSiswa(payload.nis, 'submission', 'Tugas berhasil diupload: ' + judulTugas, payload.tugasId);
-
-    return { sukses: true, pesan: 'Tugas berhasil diupload', fileUrl: file.getUrl() };
-
+    return _catatSubmission(tugas, siswa, dibuat, diuploadOleh);
   } catch (e) {
-    Logger.log('uploadTugas error: ' + e.message);
+    Logger.log('_uploadBase64 error: ' + e.stack);
     return { sukses: false, pesan: e.message };
   }
-}
-
-function getFolderTugas(tugasId, judulTugas) {
-  const root = getOrBuatFolder('RekapNilai_TE - Tugas Siswa', DriveApp.getRootFolder());
-  const namaFolderTugas = tugasId + ' - ' + judulTugas;
-  return getOrBuatFolder(namaFolderTugas, root);
-}
-
-function getOrBuatFolder(nama, parent) {
-  const existing = parent.getFoldersByName(nama);
-  if (existing.hasNext()) return existing.next();
-  return parent.createFolder(nama);
 }

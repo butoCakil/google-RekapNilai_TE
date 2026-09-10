@@ -1,61 +1,184 @@
-// TugasSiswa.js - Logic sisi siswa untuk dashboard, roadmap, dan detail tugas
+// Tugassiswa.js - Logic sisi siswa: dashboard journey, detail tugas, linimasa nilai.
+// Semua fungsi publik memakai token sesi (bukan NIS mentah) untuk keamanan.
 
-function getSemuaTugasSiswa(nis) {
-  const siswa = getSiswaByNis(nis);
-  if (!siswa) return [];
+function _siswaDariToken(token) {
+  const nis = getNisDariToken(token);
+  if (!nis) return null;
+  return getSiswaByNis(nis);
+}
 
-  const rekap = SpreadsheetApp.openById(CONFIG.REKAP_SPREADSHEET_ID);
-  const dataTugas = rekap.getSheetByName('Tugas').getDataRange().getValues();
-  const dataSub   = rekap.getSheetByName('Submission').getDataRange().getValues();
-
-  const hasil = [];
-  for (let i = 1; i < dataTugas.length; i++) {
-    if (dataTugas[i][3] !== siswa.kelas) continue;
-
-    const tugasId = dataTugas[i][0];
-    let submisi = null;
-    for (let j = 1; j < dataSub.length; j++) {
-      if (dataSub[j][1] === tugasId && String(dataSub[j][2]) === String(nis)) {
-        submisi = {
-          submissionId: dataSub[j][0], fileUrl: dataSub[j][5],
-          waktuUpload: dataSub[j][7] ? new Date(dataSub[j][7]).toISOString() : null,
-          status: dataSub[j][8], nilaiAngka: dataSub[j][9], nilaiHuruf: dataSub[j][10],
-          catatan: dataSub[j][11]
-        };
-        break;
-      }
-    }
-
-    hasil.push({
-      tugasId: tugasId,
-      judul: dataTugas[i][1],
-      deskripsi: dataTugas[i][2],
-      deadline: new Date(dataTugas[i][4]).toISOString(),
-      lampiranUrl: dataTugas[i][6],
-      jenisPenilaian: dataTugas[i][7],
-      tglDibuat: new Date(dataTugas[i][8]).toISOString(),
-      submisi: submisi,
-      status: submisi ? submisi.status : 'Belum Upload'
+// Bangun daftar item {tugas, submission} untuk kelas siswa
+function _itemTugasSiswa(siswa) {
+  const sub = getSemuaSubmission();
+  return getSemuaTugas()
+    .filter(function (t) {
+      return t.Kelas === siswa.kelas && (t.Status || STATUS_TUGAS.AKTIF) !== STATUS_TUGAS.ARSIP;
+    })
+    .map(function (t) {
+      const raw = sub.find(function (x) {
+        return x.TugasID === t.ID && String(x.NIS) === String(siswa.nis);
+      });
+      return {
+        tugas: {
+          id: t.ID, judul: t.Judul, deskripsi: t.Deskripsi, kelas: t.Kelas,
+          deadline: toIso(t.Deadline), tglDibuat: toIso(t.TglDibuat),
+          jenisPenilaian: t.JenisPenilaian, lampiranUrl: t.LampiranMateriURL
+        },
+        submission: normalisasiSubmission(raw)
+      };
     });
+}
+
+function _statusRoadmap(it) {
+  const s = it.submission;
+  if (!s) {
+    const telat = it.tugas.deadline && new Date(it.tugas.deadline) < new Date();
+    return telat ? 'terlambat' : 'belum';
   }
-  return hasil;
+  if (s.status === STATUS_SUBMISSION.DINILAI) return 'dinilai';
+  if (s.status === STATUS_SUBMISSION.REVISI) return 'revisi';
+  return 'menunggu';
 }
 
-function getDashboardSiswa(nis) {
-  // Urutkan: deadline terdekat duluan - paling relevan buat kartu "harus dikerjakan"
-  return getSemuaTugasSiswa(nis).sort(function (a, b) {
-    return new Date(a.deadline) - new Date(b.deadline);
-  });
+function _kartuTugas(it) {
+  const s = it.submission;
+  return {
+    tugasId: it.tugas.id,
+    judul: it.tugas.judul,
+    deskripsi: it.tugas.deskripsi,
+    deadline: it.tugas.deadline,
+    tglDibuat: it.tugas.tglDibuat,
+    jenisPenilaian: it.tugas.jenisPenilaian,
+    adaLampiranMateri: !!it.tugas.lampiranUrl,
+    statusRoadmap: _statusRoadmap(it),
+    sudahUpload: !!s,
+    status: s ? s.status : 'Belum Upload',
+    nilaiAngka: s ? s.nilaiAngka : null,
+    nilaiHuruf: s ? s.nilaiHuruf : null,
+    catatan: s ? s.catatan : '',
+    waktuUpload: s ? s.waktuUpload : null,
+    jumlahLampiran: s ? s.lampiran.length : 0
+  };
 }
 
-function getRoadmapSiswa(nis) {
-  // Urutkan kronologis - buat tampilan linimasa
-  return getSemuaTugasSiswa(nis).sort(function (a, b) {
-    return new Date(a.tglDibuat) - new Date(b.tglDibuat);
-  });
+// ================================================
+// DASHBOARD JOURNEY
+// ================================================
+function getDashboardSiswa(token) {
+  const siswa = _siswaDariToken(token);
+  if (!siswa) return { ok: false, pesan: 'Sesi kedaluwarsa' };
+
+  const items = _itemTugasSiswa(siswa);
+  const g = hitungGamifikasi(items);
+
+  // roadmap = urut kronologis (dibuat), untuk peta perjalanan
+  const roadmap = items.slice()
+    .sort(function (a, b) { return new Date(a.tugas.tglDibuat) - new Date(b.tugas.tglDibuat); })
+    .map(_kartuTugas);
+
+  // "harus dikerjakan" = belum upload / revisi, deadline terdekat dulu
+  const perluDikerjakan = items
+    .filter(function (it) { return _statusRoadmap(it) === 'belum' || _statusRoadmap(it) === 'terlambat' || _statusRoadmap(it) === 'revisi'; })
+    .sort(function (a, b) { return new Date(a.tugas.deadline) - new Date(b.tugas.deadline); })
+    .map(_kartuTugas);
+
+  return {
+    ok: true,
+    siswa: siswa,
+    gamifikasi: g,
+    roadmap: roadmap,
+    perluDikerjakan: perluDikerjakan,
+    notifikasiBelum: getJumlahNotifikasiBelumDibaca(siswa.nis),
+    aktivitasTerbaru: getAktivitasSiswa(siswa.nis, 5)
+  };
 }
 
-function getDetailTugasSiswa(tugasId, nis) {
-  const semua = getSemuaTugasSiswa(nis);
-  return semua.find(function (t) { return t.tugasId === tugasId; }) || null;
+// ================================================
+// DETAIL TUGAS
+// ================================================
+function getDetailTugasSiswa(token, tugasId) {
+  const siswa = _siswaDariToken(token);
+  if (!siswa) return { ok: false, pesan: 'Sesi kedaluwarsa' };
+
+  const t = getTugasById(tugasId);
+  if (!t || t.Kelas !== siswa.kelas) return { ok: false, pesan: 'Tugas tidak ditemukan' };
+
+  const raw = getSubmission(tugasId, siswa.nis);
+  const s = normalisasiSubmission(raw);
+
+  let lampiranMateri = null;
+  if (t.LampiranMateriURL) {
+    const m = String(t.LampiranMateriURL).match(/[-\w]{25,}/);
+    lampiranMateri = { url: t.LampiranMateriURL, fileId: m ? m[0] : null };
+  }
+
+  return {
+    ok: true,
+    siswa: siswa,
+    tugas: {
+      id: t.ID, judul: t.Judul, deskripsi: t.Deskripsi, kelas: t.Kelas,
+      deadline: toIso(t.Deadline), tglDibuat: toIso(t.TglDibuat),
+      jenisPenilaian: t.JenisPenilaian, lampiranMateri: lampiranMateri,
+      lewatDeadline: t.Deadline && new Date(t.Deadline) < new Date()
+    },
+    submission: s,
+    statusRoadmap: _statusRoadmap({ tugas: { deadline: toIso(t.Deadline) }, submission: s })
+  };
+}
+
+// ================================================
+// LINIMASA / REKAP NILAI SISWA
+// ================================================
+function getLinimasaSiswa(token) {
+  const siswa = _siswaDariToken(token);
+  if (!siswa) return { ok: false, pesan: 'Sesi kedaluwarsa' };
+
+  const items = _itemTugasSiswa(siswa);
+  const g = hitungGamifikasi(items);
+
+  const titik = items.slice()
+    .sort(function (a, b) { return new Date(a.tugas.deadline) - new Date(b.tugas.deadline); })
+    .map(function (it) {
+      const s = it.submission;
+      return {
+        tugasId: it.tugas.id,
+        judul: it.tugas.judul,
+        deadline: it.tugas.deadline,
+        status: _statusRoadmap(it),
+        dinilai: !!(s && s.status === STATUS_SUBMISSION.DINILAI),
+        nilaiAngka: s ? s.nilaiAngka : null,
+        nilaiHuruf: s ? s.nilaiHuruf : null,
+        catatan: s ? s.catatan : ''
+      };
+    });
+
+  const dinilai = titik.filter(function (t) { return t.dinilai && t.nilaiAngka !== null; });
+  return {
+    ok: true,
+    siswa: siswa,
+    gamifikasi: g,
+    titik: titik,
+    ringkas: {
+      rataNilai: g.rataNilai,
+      nilaiHurufRata: g.rataNilai !== null ? angkaKeHuruf(g.rataNilai) : null,
+      tertinggi: dinilai.length ? Math.max.apply(null, dinilai.map(function (t) { return t.nilaiAngka; })) : null,
+      terendah: dinilai.length ? Math.min.apply(null, dinilai.map(function (t) { return t.nilaiAngka; })) : null,
+      jumlahDinilai: dinilai.length
+    }
+  };
+}
+
+// ================================================
+// NOTIFIKASI (proxy aman lewat token)
+// ================================================
+function getNotifikasiSiswaToken(token) {
+  const siswa = _siswaDariToken(token);
+  if (!siswa) return { ok: false, pesan: 'Sesi kedaluwarsa' };
+  return { ok: true, aktivitas: getAktivitasSiswa(siswa.nis, 50) };
+}
+
+function tandaiSemuaDibacaToken(token) {
+  const siswa = _siswaDariToken(token);
+  if (!siswa) return { ok: false };
+  return tandaiSemuaNotifikasiDibaca(siswa.nis);
 }
