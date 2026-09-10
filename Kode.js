@@ -59,6 +59,30 @@ function doGet(e) {
       .addMetaTag('viewport', 'width=device-width, initial-scale=1');
   }
 
+    if (page === 'loginTugas') {
+    const templateLogin = HtmlService.createTemplateFromFile('LoginSiswaTugas');
+    templateLogin.scriptUrl = ScriptApp.getService().getUrl();
+    return templateLogin.evaluate()
+      .setTitle('Login Tugas Siswa - TE')
+      .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+  }
+
+  if (page === 'dashboardTugas') {
+    const nis = getNisDariToken(e.parameter.token);
+    if (!nis) return redirectTo('loginTugas');
+    const siswa = getSiswaByNis(nis);
+    const template = HtmlService.createTemplateFromFile('DashboardTugas');
+    template.nis = nis;
+    template.token = e.parameter.token;
+    template.nama = siswa.nama;
+    template.kelas = siswa.kelas;
+    template.scriptUrl = ScriptApp.getService().getUrl();
+    Logger.log('DEBUG scriptUrl (dashboardTugas): ' + template.scriptUrl);
+    return template.evaluate()
+      .setTitle('Dashboard Tugas - TE')
+      .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+  }
+
   // Default: halaman index / login
   return HtmlService.createTemplateFromFile('Index')
     .evaluate()
@@ -69,7 +93,7 @@ function doGet(e) {
 function redirectTo(page) {
   const url = ScriptApp.getService().getUrl() + '?page=' + page;
   return HtmlService.createHtmlOutput(
-    '<script>window.location.href="' + url + '";</script>'
+    '<script>top.location.href="' + url + '";</script>'
   );
 }
 
@@ -110,4 +134,52 @@ function debugNilaiSiswa() {
   
   const siswa = getSiswaByNis('3306');
   Logger.log('Hasil getSiswaByNis: ' + JSON.stringify(siswa));
+}
+
+function tesFase2() {
+  const hasilBuat = buatTugas({
+    judul: 'Tes Rangkaian Seri-Paralel',
+    deskripsi: 'Kerjakan soal di modul halaman 12',
+    kelas: 'XI TE 1',
+    deadline: new Date('2026-09-20'),
+    jenisPenilaian: 'angka'
+  });
+  Logger.log(JSON.stringify(hasilBuat));
+
+  Logger.log(JSON.stringify(getDaftarTugasGuru()));
+  Logger.log(JSON.stringify(getRekapTugas(hasilBuat.id)));
+}
+
+function tesFase3() {
+  const login = loginSiswaTugas('3306', 'teskaneba');
+  Logger.log(JSON.stringify(login));
+
+  const teksUji = 'Ini file uji coba upload tugas.';
+  const base64Uji = Utilities.base64Encode(teksUji, Utilities.Charset.UTF_8);
+
+  const hasilUpload = uploadTugas({
+    nis: '3306',
+    tugasId: 'TGS-1789011010614-104',
+    fileBase64: base64Uji,
+    fileName: 'uji-coba.txt',
+    mimeType: 'text/plain'
+  });
+  Logger.log(JSON.stringify(hasilUpload));
+
+  Logger.log(JSON.stringify(getDashboardSiswa('3306')));
+  Logger.log(JSON.stringify(getNotifikasiSiswa('3306')));
+}
+
+function tesKoreksi() {
+  const hasil = simpanKoreksi({
+    submissionId: 'SUB-1789011432027-555',
+    status: 'Dinilai',
+    tipeInput: 'angka',
+    nilai: 88,
+    catatan: 'Bagus, lanjutkan ke tugas berikutnya.'
+  });
+  Logger.log(JSON.stringify(hasil));
+
+  Logger.log(JSON.stringify(getDetailSubmission('SUB-1789011432027-555')));
+  Logger.log(JSON.stringify(getDashboardSiswa('3306')));
 }
