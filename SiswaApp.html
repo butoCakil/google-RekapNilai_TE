@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <?!= include('AppCSS') ?>
+  <style>
+    .quest-hd{display:flex;flex-direction:column;gap:2px;margin-bottom:16px}
+    .streak-flame{display:inline-flex;align-items:center;gap:4px}
+    .todo-card{display:flex;gap:12px;align-items:center;background:var(--panel);border-radius:var(--r);
+      box-shadow:var(--sh);padding:14px 16px;cursor:pointer;transition:.15s}
+    .todo-card:hover{transform:translateY(-2px);box-shadow:var(--sh-lg)}
+    .todo-card .ring{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;font-size:18px;flex-shrink:0}
+    .materi-embed{margin-top:10px}
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="brand"><span class="logo">🎓</span> <span>Portal Tugas TE</span></div>
+    <div class="spacer"></div>
+    <button class="nav-bell btn btn-ghost btn-sm" onclick="location.hash='#/notifikasi'" style="position:relative">
+      🔔 <span id="bellCount" class="badge-dot" style="display:none;position:absolute;top:-6px;right:-6px">0</span>
+    </button>
+    <div class="chip-user">
+      <span id="uNama"></span>
+      <span class="avatar" id="uAv"></span>
+    </div>
+  </div>
+
+  <div class="app">
+    <div class="nav" id="nav">
+      <button data-view="journey">🗺️ Perjalanan</button>
+      <button data-view="linimasa">📈 Linimasa Nilai</button>
+      <button data-view="notifikasi">🔔 Aktivitas <span id="navBell" class="badge-dot" style="display:none">0</span></button>
+      <div class="spacer" style="flex:1"></div>
+      <button onclick="keluar()" class="ghost-x">🚪 Keluar</button>
+    </div>
+    <div id="view"><div class="loading"><div class="spinner"></div>Memuat perjalanan belajarmu…</div></div>
+  </div>
+
+  <div id="toasts"></div>
+  <div id="modal-root"></div>
+
+  <?!= include('AppJS') ?>
+  <script>
+    var TOKEN = '<?= token ?>';
+    var SCRIPT_URL = '<?= scriptUrl ?>';
+    var SISWA = <?!= siswaJson ?>;
+    var VIEW_AWAL = '<?= viewAwal ?>';
+    var DASH = null;
+
+    document.getElementById('uNama').textContent = SISWA.nama;
+    document.getElementById('uAv').textContent = (SISWA.nama||'?').trim().charAt(0).toUpperCase();
+
+    grun('getKonversiNilai').then(setKonversi).catch(function(){});
+
+    // ---------- ROUTER ----------
+    window.addEventListener('hashchange', route);
+    function route(){
+      var hash = location.hash.replace(/^#\/?/, '') || VIEW_AWAL || 'journey';
+      var parts = hash.split('/');
+      var view = parts[0];
+      $all('#nav button[data-view]').forEach(function(b){
+        b.classList.toggle('active', b.dataset.view === view);
+      });
+      if(view === 'detail') return renderDetail(parts.slice(1).join('/'));
+      if(view === 'linimasa') return renderLinimasa();
+      if(view === 'notifikasi') return renderNotifikasi();
+      return renderJourney();
+    }
+    $all('#nav button[data-view]').forEach(function(b){
+      b.onclick = function(){ location.hash = '#/' + b.dataset.view; };
+    });
+
+    function setView(html){ document.getElementById('view').innerHTML = html; }
+    function loading(txt){ setView('<div class="loading"><div class="spinner"></div>' + (txt||'Memuat…') + '</div>'); }
+    function keluar(){ top.location.href = SCRIPT_URL + '?page=loginTugas'; }
+
+    function updateBell(n){
+      ['bellCount','navBell'].forEach(function(id){
+        var el = document.getElementById(id);
+        if(!el) return;
+        if(n > 0){ el.textContent = n; el.style.display = ''; } else { el.style.display = 'none'; }
+      });
+    }
+
+    // ---------- JOURNEY ----------
+    function renderJourney(){
+      loading('Memuat perjalanan belajarmu…');
+      grun('getDashboardSiswa', TOKEN).then(function(d){
+        if(!d.ok){ toast(d.pesan || 'Sesi habis', 'err'); return keluar(); }
+        DASH = d;
+        updateBell(d.notifikasiBelum);
+        var g = d.gamifikasi;
+
+        var medals = g.badge.map(function(b){
+          return '<div class="medal ' + (b.dapat ? 'on' : '') + '">' +
+                   '<div class="disc">' + (b.dapat ? '🏅' : '🔒') + '</div>' +
+                   '<div class="lbl">' + esc(b.nama) + '</div></div>';
+        }).join('');
+
+        var hero =
+          '<div class="hero-xp">' +
+            '<div class="level-badge"><b>' + g.level + '</b><span>LEVEL</span></div>' +
+            '<div class="xp-wrap">' +
+              '<div class="row-between"><strong style="font-size:15px">' + esc(SISWA.nama) + '</strong>' +
+                '<span class="small">' + g.xpDiLevel + ' / ' + g.xpUntukNaik + ' XP</span></div>' +
+              '<div class="xp-track"><div class="xp-fill" style="width:' + g.progresLevel + '%"></div></div>' +
+              '<div class="pill-row">' +
+                '<span class="pill">🔥 Streak ' + g.streak + '</span>' +
+                '<span class="pill">✅ ' + g.terkumpul + '/' + g.totalTugas + ' terkumpul</span>' +
+                '<span class="pill">⭐ ' + (g.rataNilai == null ? '–' : g.rataNilai) + ' rata-rata</span>' +
+              '</div>' +
+            '</div>' +
+          '</div>';
+
+        var stats =
+          '<div class="grid cols-4" style="margin-top:16px">' +
+            statTile('Total XP', g.xp, '✨') +
+            statTile('Tepat waktu', g.rasioTepatWaktu + '<small>%</small>', '⏱️') +
+            statTile('Sudah dinilai', g.dinilai, '📊') +
+            statTile('Perlu revisi', g.revisi, '🔁') +
+          '</div>';
+
+        var todo = d.perluDikerjakan.length
+          ? '<div class="panel" style="margin-top:18px"><div class="section-title">🎯 Perlu kamu kerjakan</div>' +
+              d.perluDikerjakan.map(todoCard).join('') + '</div>'
+          : '<div class="panel" style="margin-top:18px"><div class="empty"><div class="ic">🎉</div>' +
+              'Mantap! Tidak ada tugas yang tertunda.</div></div>';
+
+        var path = '<div class="panel" style="margin-top:18px">' +
+            '<div class="section-title">🗺️ Peta Perjalanan</div>' +
+            (d.roadmap.length ? '<div class="journey">' + d.roadmap.map(journeyNode).join('') + '</div>'
+                              : '<div class="empty"><div class="ic">📭</div>Belum ada tugas untuk kelasmu.</div>') +
+          '</div>';
+
+        var badges = '<div class="panel" style="margin-top:18px"><div class="section-title">🏆 Lencana</div>' +
+          '<div class="medals">' + medals + '</div></div>';
+
+        setView(hero + stats + todo + path + badges);
+      }).catch(function(e){ setView(errBox(e)); });
+    }
+
+    function statTile(k, v, ic){
+      return '<div class="stat"><div class="ic">' + ic + '</div><div class="k">' + k + '</div><div class="v">' + v + '</div></div>';
+    }
+
+    function todoCard(t){
+      var sd = sisaDeadline(t.deadline);
+      var warna = t.statusRoadmap === 'revisi' ? 'var(--rose)' : (sd.telat ? 'var(--rose)' : 'var(--amber)');
+      return '<div class="todo-card" onclick="location.hash=\'#/detail/' + t.tugasId + '\'" style="margin-top:8px">' +
+        '<div class="ring" style="background:' + warna + '22;color:' + warna + '">' +
+          (t.statusRoadmap === 'revisi' ? '🔁' : '📝') + '</div>' +
+        '<div style="flex:1;min-width:0">' +
+          '<div style="font-weight:800">' + esc(t.judul) + '</div>' +
+          '<div class="small muted">' + (t.statusRoadmap === 'revisi' ? 'Diminta revisi • ' : '') + sd.label + '</div>' +
+        '</div><span class="st ' + t.statusRoadmap + '">' + labelStatus(t.statusRoadmap) + '</span></div>';
+    }
+
+    function journeyNode(t){
+      var s = t.statusRoadmap;
+      var ikon = { belum:'•', terlambat:'!', menunggu:'⏳', revisi:'🔁', dinilai:'★' }[s] || '•';
+      var nilai = (t.status === 'Dinilai' && t.nilaiHuruf)
+        ? '<span class="grade"><span class="huruf">' + esc(t.nilaiHuruf) + '</span><span class="angka">' + t.nilaiAngka + '</span></span>'
+        : '<span class="st ' + s + '">' + labelStatus(s) + '</span>';
+      return '<div class="node">' +
+        '<div class="dot ' + s + '">' + ikon + '</div>' +
+        '<div class="body" onclick="location.hash=\'#/detail/' + t.tugasId + '\'">' +
+          '<div class="row-between"><div class="t">' + esc(t.judul) + '</div>' + nilai + '</div>' +
+          '<div class="m">Deadline ' + fmtTgl(t.deadline) + ' • ' + sisaDeadline(t.deadline).label +
+            (t.catatan ? ' • 💬 ada catatan guru' : '') + '</div>' +
+        '</div></div>';
+    }
+
+    function labelStatus(s){
+      return { belum:'Belum upload', terlambat:'Terlambat', menunggu:'Menunggu nilai',
+               revisi:'Revisi', dinilai:'Dinilai' }[s] || s;
+    }
+
+    // ---------- DETAIL TUGAS ----------
+    var _uploadFiles = [];
+    function renderDetail(tugasId){
+      loading('Memuat detail tugas…');
+      _uploadFiles = [];
+      grun('getDetailTugasSiswa', TOKEN, tugasId).then(function(d){
+        if(!d.ok){ toast(d.pesan || 'Tugas tidak ditemukan', 'err'); location.hash = '#/journey'; return; }
+        var t = d.tugas, s = d.submission;
+
+        var head =
+          '<div class="panel">' +
+            '<button class="btn btn-ghost btn-sm" onclick="location.hash=\'#/journey\'">← Kembali</button>' +
+            '<div class="quest-hd" style="margin-top:12px">' +
+              '<h2 class="h-hero" style="color:var(--ink)">' + esc(t.judul) + '</h2>' +
+              '<div class="small muted">' + esc(t.kelas) + ' • Deadline ' + fmtTglJam(t.deadline) +
+                ' • <b>' + sisaDeadline(t.deadline).label + '</b> • Penilaian: ' + t.jenisPenilaian + '</div>' +
+            '</div>' +
+            (t.deskripsi ? '<div class="card-flat" style="white-space:pre-wrap">' + esc(t.deskripsi) + '</div>' : '') +
+            (t.lampiranMateri ? '<div class="materi-embed" id="materiBox">' +
+                '<div class="section-title" style="font-size:14px;margin:14px 0 8px">📎 Berkas dari guru</div>' +
+                '<a class="btn btn-ghost btn-sm" href="' + esc(t.lampiranMateri.url) + '" target="_blank">Buka berkas materi ↗</a>' +
+                '<div id="materiPrev"></div></div>' : '') +
+          '</div>';
+
+        var statusBox = '';
+        if(s){
+          var st = s.status === 'Dinilai' ? 'dinilai' : (s.status === 'Revisi' ? 'revisi' : 'menunggu');
+          statusBox =
+            '<div class="panel" style="margin-top:16px">' +
+              '<div class="row-between"><div class="section-title" style="margin:0">📤 Kumpulanmu</div>' +
+                '<span class="st ' + st + '">' + esc(s.status) + '</span></div>' +
+              '<div class="small muted" style="margin:6px 0 12px">Diunggah ' + fmtTglJam(s.waktuUpload) +
+                (s.diuploadOleh && s.diuploadOleh.indexOf('guru') === 0 ? ' oleh guru' : '') + '</div>' +
+              (s.status === 'Dinilai'
+                ? '<div class="card-flat" style="display:flex;gap:20px;align-items:center;flex-wrap:wrap">' +
+                    '<div><div class="small muted">NILAI</div>' +
+                      '<div class="grade"><span class="huruf" style="font-size:30px">' + esc(s.nilaiHuruf || '-') + '</span>' +
+                      '<span class="angka" style="font-size:16px">' + (s.nilaiAngka == null ? '' : s.nilaiAngka) + '</span></div></div>' +
+                    (s.catatan ? '<div style="flex:1;min-width:180px"><div class="small muted">CATATAN GURU</div>' +
+                      '<div style="white-space:pre-wrap">' + esc(s.catatan) + '</div></div>' : '') +
+                  '</div>'
+                : (s.status === 'Revisi'
+                    ? '<div class="card-flat" style="border-color:#fdba74;background:#fff7ed">' +
+                        '<b style="color:#c2410c">Guru meminta revisi.</b>' +
+                        (s.catatan ? '<div style="margin-top:6px;white-space:pre-wrap">' + esc(s.catatan) + '</div>' : '') +
+                        '<div class="small muted" style="margin-top:6px">Perbaiki lalu unggah ulang di bawah.</div></div>'
+                    : '<div class="small muted">Menunggu koreksi guru.</div>')) +
+              '<div id="kumpulanPrev" style="margin-top:12px"></div>' +
+            '</div>';
+        }
+
+        var bisaUpload = s ? (s.status === 'Revisi' || s.status === 'Menunggu Penilaian') : true;
+        var uploadBox = bisaUpload
+          ? '<div class="panel" style="margin-top:16px">' +
+              '<div class="section-title">' + (s ? '♻️ Unggah ulang' : '⬆️ Kumpulkan tugas') + '</div>' +
+              '<div class="dz" id="dz"><div class="ic">📁</div>' +
+                '<div style="font-weight:800;margin-top:6px">Tarik berkas ke sini atau klik untuk memilih</div>' +
+                '<div class="small muted">Gambar, PDF, Word, teks, video — beberapa berkas boleh</div></div>' +
+              '<input type="file" id="fileInput" multiple hidden>' +
+              '<div id="fileList"></div>' +
+              '<button class="btn btn-primary" id="btnKirim" style="margin-top:14px" disabled>Kirim tugas</button>' +
+            '</div>'
+          : '<div class="panel" style="margin-top:16px"><div class="small muted">Tugas sudah dinilai. Hubungi guru bila perlu mengunggah ulang.</div></div>';
+
+        setView(head + statusBox + uploadBox);
+
+        if(t.lampiranMateri && t.lampiranMateri.fileId) embedPreview('materiPrev', [t.lampiranMateri.fileId]);
+        if(s && s.lampiran && s.lampiran.length) embedPreview('kumpulanPrev', s.lampiran.map(function(l){ return l.id; }));
+        if(bisaUpload) wireUpload(tugasId);
+      }).catch(function(e){ setView(errBox(e)); });
+    }
+
+    function wireUpload(tugasId){
+      var dz = $('#dz'), input = $('#fileInput'), list = $('#fileList'), btn = $('#btnKirim');
+      dz.onclick = function(){ input.click(); };
+      ['dragenter','dragover'].forEach(function(ev){ dz.addEventListener(ev, function(e){ e.preventDefault(); dz.classList.add('drag'); }); });
+      ['dragleave','drop'].forEach(function(ev){ dz.addEventListener(ev, function(e){ e.preventDefault(); dz.classList.remove('drag'); }); });
+      dz.addEventListener('drop', function(e){ tambahFile(e.dataTransfer.files); });
+      input.onchange = function(){ tambahFile(input.files); input.value = ''; };
+
+      function tambahFile(fl){
+        Array.prototype.slice.call(fl).forEach(function(f){ _uploadFiles.push(f); });
+        gambarList();
+      }
+      function gambarList(){
+        list.innerHTML = _uploadFiles.map(function(f, i){
+          return '<div class="file-row"><span>📄</span><span class="grow">' + esc(f.name) + '</span>' +
+            '<span class="small muted">' + fmtUkuran(f.size) + '</span>' +
+            '<button class="x" data-i="' + i + '" style="width:26px;height:26px">✕</button>' +
+            '<div class="progress" style="flex-basis:100%"><i data-prog="' + i + '"></i></div></div>';
+        }).join('');
+        $all('#fileList .x').forEach(function(x){
+          x.onclick = function(){ _uploadFiles.splice(+x.dataset.i, 1); gambarList(); };
+        });
+        btn.disabled = _uploadFiles.length === 0;
+      }
+
+      btn.onclick = function(){
+        if(!_uploadFiles.length) return;
+        btn.disabled = true; btn.textContent = 'Mengunggah…';
+        uploadBerkas(_uploadFiles, {
+          peran:'siswa', token:TOKEN, tugasId:tugasId,
+          onProgress: function(i, p){ var bar = $('[data-prog="' + i + '"]'); if(bar) bar.style.width = p + '%'; }
+        }).then(function(res){
+          if(res && res.sukses){ toast('Tugas terkumpul! +XP 🎉', 'ok'); renderDetail(tugasId); }
+          else { toast((res && res.pesan) || 'Gagal mengumpulkan', 'err'); btn.disabled = false; btn.textContent = 'Kirim tugas'; }
+        }).catch(function(e){
+          toast('Gagal: ' + e.message, 'err'); btn.disabled = false; btn.textContent = 'Kirim tugas';
+        });
+      };
+    }
+
+    // ---------- PREVIEW ----------
+    function embedPreview(containerId, fileIds){
+      var box = document.getElementById(containerId);
+      if(!box) return;
+      box.innerHTML = '<div class="small muted">Memuat pratinjau…</div>';
+      grun('getPreviewBanyak', fileIds).then(function(list){
+        list = (list || []).filter(function(p){ return p && p.ok; });
+        if(!list.length){ box.innerHTML = '<div class="small muted">Pratinjau tidak tersedia.</div>'; return; }
+        var tabs = list.map(function(p, i){
+          return '<button data-i="' + i + '" class="' + (i === 0 ? 'active' : '') + '">' + esc(p.nama) + '</button>';
+        }).join('');
+        box.innerHTML = '<div class="preview-tabs">' + tabs + '</div><div class="preview-box" id="' + containerId + '-stage"></div>' +
+          '<div class="small muted" style="margin-top:6px" id="' + containerId + '-meta"></div>';
+        var stage = document.getElementById(containerId + '-stage');
+        var meta = document.getElementById(containerId + '-meta');
+        function show(i){
+          var p = list[i];
+          $all('.preview-tabs button', box).forEach(function(b){ b.classList.toggle('active', +b.dataset.i === i); });
+          meta.innerHTML = p.mime + ' • ' + fmtUkuran(p.size) +
+            ' • <a href="' + esc(p.urlBuka) + '" target="_blank">buka di Drive ↗</a>' +
+            ' • <a href="' + esc(p.urlUnduh) + '" target="_blank">unduh ↓</a>';
+          if(p.mode === 'gambar') stage.innerHTML = '<img src="' + esc(p.urlLangsung) + '" alt="">';
+          else if(p.mode === 'video') stage.innerHTML = '<iframe src="' + esc(p.urlPreview) + '" allow="autoplay" allowfullscreen></iframe>';
+          else if(p.mode === 'audio') stage.innerHTML = '<audio controls src="' + esc(p.urlLangsung) + '" style="width:100%;margin:20px"></audio>';
+          else if(p.mode === 'teks' && p.teks != null) stage.innerHTML = '<pre style="margin:0;padding:16px;background:#fff;color:#111;max-height:70vh;overflow:auto;white-space:pre-wrap;width:100%">' + esc(p.teks) + '</pre>';
+          else stage.innerHTML = '<iframe src="' + esc(p.urlPreview) + '"></iframe>';
+        }
+        $all('.preview-tabs button', box).forEach(function(b){ b.onclick = function(){ show(+b.dataset.i); }; });
+        show(0);
+      }).catch(function(){ box.innerHTML = '<div class="small muted">Pratinjau gagal dimuat.</div>'; });
+    }
+
+    // ---------- LINIMASA ----------
+    function renderLinimasa(){
+      loading('Menyusun linimasa nilai…');
+      grun('getLinimasaSiswa', TOKEN).then(function(d){
+        if(!d.ok){ return keluar(); }
+        var r = d.ringkas, g = d.gamifikasi;
+        var head = '<div class="grid cols-4">' +
+          statTile('Rata-rata', (r.rataNilai == null ? '–' : r.rataNilai) +
+            (r.nilaiHurufRata ? ' <small>' + r.nilaiHurufRata + '</small>' : ''), '⭐') +
+          statTile('Tertinggi', r.tertinggi == null ? '–' : r.tertinggi, '🔝') +
+          statTile('Terendah', r.terendah == null ? '–' : r.terendah, '🔻') +
+          statTile('Sudah dinilai', r.jumlahDinilai + '<small>/' + g.totalTugas + '</small>', '✅') +
+          '</div>';
+        var rows = d.titik.map(function(t){
+          var nilai = t.dinilai
+            ? '<span class="grade"><span class="huruf">' + esc(t.nilaiHuruf || '-') + '</span><span class="angka">' + (t.nilaiAngka == null ? '' : t.nilaiAngka) + '</span></span>'
+            : '<span class="st ' + t.status + '">' + labelStatus(t.status) + '</span>';
+          return '<div class="node"><div class="dot ' + t.status + '">' + (t.dinilai ? '★' : '•') + '</div>' +
+            '<div class="body" onclick="location.hash=\'#/detail/' + t.tugasId + '\'">' +
+              '<div class="row-between"><div class="t">' + esc(t.judul) + '</div>' + nilai + '</div>' +
+              '<div class="m">Deadline ' + fmtTgl(t.deadline) + (t.catatan ? ' • 💬 ' + esc(t.catatan) : '') + '</div>' +
+            '</div></div>';
+        }).join('');
+        setView(head + '<div class="panel" style="margin-top:18px"><div class="section-title">📈 Nilai di tiap titik tugas</div>' +
+          (d.titik.length ? '<div class="journey">' + rows + '</div>' : '<div class="empty">Belum ada tugas.</div>') + '</div>');
+      }).catch(function(e){ setView(errBox(e)); });
+    }
+
+    // ---------- NOTIFIKASI ----------
+    function renderNotifikasi(){
+      loading('Memuat aktivitas…');
+      grun('getNotifikasiSiswaToken', TOKEN).then(function(d){
+        if(!d.ok){ return keluar(); }
+        var items = d.aktivitas || [];
+        var list = items.length ? items.map(function(a){
+          return '<div class="file-row" style="align-items:flex-start;' + (a.dibaca ? '' : 'border-color:var(--brand)') + '">' +
+            '<span style="font-size:18px">' + a.ikon + '</span>' +
+            '<div class="grow" style="white-space:normal">' + esc(a.pesan) +
+              '<div class="small muted">' + a.waktuLabel + '</div></div>' +
+            (a.tugasId ? '<button class="btn btn-ghost btn-sm" onclick="location.hash=\'#/detail/' + a.tugasId + '\'">Lihat</button>' : '') +
+          '</div>';
+        }).join('') : '<div class="empty"><div class="ic">🔔</div>Belum ada aktivitas.</div>';
+        setView('<div class="panel"><div class="row-between"><div class="section-title" style="margin:0">🔔 Aktivitas & Notifikasi</div>' +
+          '<button class="btn btn-ghost btn-sm" id="btnRead">Tandai semua dibaca</button></div><div style="margin-top:12px">' + list + '</div></div>');
+        var br = $('#btnRead');
+        if(br) br.onclick = function(){
+          grun('tandaiSemuaDibacaToken', TOKEN).then(function(){ updateBell(0); renderNotifikasi(); });
+        };
+        updateBell(0);
+      }).catch(function(e){ setView(errBox(e)); });
+    }
+
+    function errBox(e){
+      return '<div class="panel"><div class="empty"><div class="ic">⚠️</div>Terjadi kesalahan.<div class="small muted">' +
+        esc(e && e.message || e) + '</div><button class="btn btn-ghost btn-sm" style="margin-top:12px" onclick="route()">Coba lagi</button></div></div>';
+    }
+
+    route();
+  </script>
+</body>
+</html>

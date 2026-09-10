@@ -1,0 +1,248 @@
+<style>
+/* ============================================================
+   RekapNilai TE - Design System "LMS Journey"
+   Dipakai bersama oleh SiswaApp & GuruApp lewat include('AppCSS')
+   ============================================================ */
+:root{
+  --bg:#0e1233;              /* latar gelap ungu-biru */
+  --bg-soft:#171c4a;
+  --panel:#ffffff;
+  --panel-2:#f5f6ff;
+  --ink:#1e2140;
+  --ink-soft:#5b5f86;
+  --line:#e6e7f5;
+
+  --brand:#5b4bff;           /* indigo/violet utama */
+  --brand-2:#8b5cf6;
+  --brand-ink:#3a2ecc;
+
+  --lime:#22c55e;
+  --amber:#f59e0b;
+  --rose:#ef4444;
+  --sky:#0ea5e9;
+  --gold:#fbbf24;
+
+  --r-sm:10px; --r:16px; --r-lg:24px; --r-xl:32px;
+  --sh-sm:0 1px 2px rgba(14,18,51,.06),0 1px 3px rgba(14,18,51,.1);
+  --sh:0 6px 24px rgba(14,18,51,.10);
+  --sh-lg:0 20px 60px rgba(14,18,51,.22);
+  --font:'Plus Jakarta Sans','Segoe UI',system-ui,-apple-system,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  font-family:var(--font);
+  color:var(--ink);
+  background:var(--bg);
+  background-image:
+    radial-gradient(900px 500px at 10% -10%, rgba(139,92,246,.35), transparent 60%),
+    radial-gradient(800px 500px at 110% 10%, rgba(14,165,233,.25), transparent 55%);
+  background-attachment:fixed;
+  -webkit-font-smoothing:antialiased;
+}
+a{color:inherit}
+button{font-family:inherit}
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-thumb{background:rgba(120,120,160,.35);border-radius:20px}
+
+/* ---------- LAYOUT ---------- */
+.app{max-width:1080px;margin:0 auto;padding:0 16px 80px}
+.topbar{
+  position:sticky;top:0;z-index:40;
+  display:flex;align-items:center;gap:14px;
+  padding:14px 16px;margin:0 -16px 20px;
+  background:rgba(14,18,51,.72);backdrop-filter:blur(12px);
+  border-bottom:1px solid rgba(255,255,255,.08);
+}
+.topbar .brand{display:flex;align-items:center;gap:10px;color:#fff;font-weight:800;letter-spacing:-.02em}
+.topbar .brand .logo{
+  width:34px;height:34px;border-radius:11px;display:grid;place-items:center;
+  background:linear-gradient(135deg,var(--brand),var(--brand-2));box-shadow:var(--sh);font-size:18px
+}
+.topbar .spacer{flex:1}
+.chip-user{display:flex;align-items:center;gap:8px;color:#dfe1ff;font-size:13px;font-weight:600}
+.avatar{width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#f472b6,#8b5cf6);
+  display:grid;place-items:center;color:#fff;font-weight:800;font-size:13px}
+
+/* ---------- NAV (tab) ---------- */
+.nav{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:22px}
+.nav button{
+  border:0;cursor:pointer;padding:10px 16px;border-radius:999px;
+  background:rgba(255,255,255,.10);color:#d9dbff;font-weight:700;font-size:13.5px;
+  display:flex;align-items:center;gap:7px;transition:.15s;
+}
+.nav button:hover{background:rgba(255,255,255,.18)}
+.nav button.active{background:#fff;color:var(--brand-ink);box-shadow:var(--sh)}
+.nav .badge-dot{background:var(--rose);color:#fff;border-radius:999px;font-size:11px;
+  min-width:18px;height:18px;display:grid;place-items:center;padding:0 5px}
+
+/* ---------- CARD / PANEL ---------- */
+.panel{background:var(--panel);border-radius:var(--r-lg);box-shadow:var(--sh-lg);padding:22px}
+.panel + .panel{margin-top:18px}
+.card{background:var(--panel);border-radius:var(--r);box-shadow:var(--sh);padding:18px}
+.card-flat{background:var(--panel-2);border:1px solid var(--line);border-radius:var(--r);padding:16px}
+.grid{display:grid;gap:14px}
+.grid.cols-2{grid-template-columns:repeat(2,1fr)}
+.grid.cols-3{grid-template-columns:repeat(3,1fr)}
+.grid.cols-4{grid-template-columns:repeat(4,1fr)}
+@media(max-width:820px){.grid.cols-3,.grid.cols-4{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:520px){.grid.cols-2,.grid.cols-3,.grid.cols-4{grid-template-columns:1fr}}
+
+h1,h2,h3{margin:0;letter-spacing:-.02em}
+.h-hero{font-size:26px;font-weight:800;color:#fff}
+.sub-hero{color:#c7c9f5;font-size:14px;margin-top:4px}
+.section-title{font-size:16px;font-weight:800;margin-bottom:14px;display:flex;align-items:center;gap:8px}
+.quest-hd{display:flex;flex-direction:column;gap:3px;margin-bottom:14px}
+.muted{color:var(--ink-soft)}
+.small{font-size:12.5px}
+
+/* ---------- STAT TILE ---------- */
+.stat{position:relative;overflow:hidden;background:var(--panel);border-radius:var(--r);box-shadow:var(--sh);padding:16px 18px}
+.stat .k{font-size:12px;font-weight:700;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.04em}
+.stat .v{font-size:28px;font-weight:800;margin-top:6px;line-height:1}
+.stat .v small{font-size:14px;font-weight:700;color:var(--ink-soft)}
+.stat .ic{position:absolute;right:12px;top:12px;font-size:22px;opacity:.25}
+
+/* ---------- XP BAR / LEVEL ---------- */
+.hero-xp{
+  background:linear-gradient(135deg,var(--brand),var(--brand-2));
+  color:#fff;border-radius:var(--r-lg);padding:22px;box-shadow:var(--sh-lg);
+  display:flex;gap:20px;align-items:center;flex-wrap:wrap
+}
+.level-badge{
+  width:74px;height:74px;border-radius:22px;flex-shrink:0;
+  background:rgba(255,255,255,.16);border:2px solid rgba(255,255,255,.5);
+  display:grid;place-items:center;text-align:center
+}
+.level-badge b{display:block;font-size:24px;line-height:1}
+.level-badge span{font-size:10px;letter-spacing:.1em;opacity:.85}
+.xp-wrap{flex:1;min-width:200px}
+.xp-track{height:14px;border-radius:999px;background:rgba(255,255,255,.25);overflow:hidden;margin-top:8px}
+.xp-fill{height:100%;border-radius:999px;background:linear-gradient(90deg,var(--gold),#fff)}
+.pill-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.pill{background:rgba(255,255,255,.18);border-radius:999px;padding:5px 11px;font-size:12px;font-weight:700}
+
+/* ---------- BADGE (achievement) ---------- */
+.medals{display:flex;gap:10px;flex-wrap:wrap}
+.medal{width:64px;text-align:center;opacity:.35;filter:grayscale(1)}
+.medal.on{opacity:1;filter:none}
+.medal .disc{width:52px;height:52px;margin:0 auto 4px;border-radius:50%;
+  background:radial-gradient(circle at 30% 25%,#fff6d6,var(--gold));
+  display:grid;place-items:center;font-size:24px;box-shadow:var(--sh-sm)}
+.medal .lbl{font-size:10.5px;font-weight:700;color:var(--ink-soft)}
+
+/* ---------- JOURNEY PATH ---------- */
+.journey{position:relative;padding:8px 0}
+.journey::before{content:"";position:absolute;left:27px;top:0;bottom:0;width:4px;
+  background:repeating-linear-gradient(var(--line) 0 8px,transparent 8px 16px)}
+.node{position:relative;padding:0 0 20px 70px;min-height:56px}
+.node .dot{
+  position:absolute;left:6px;top:0;width:44px;height:44px;border-radius:14px;
+  display:grid;place-items:center;font-size:20px;color:#fff;font-weight:800;
+  box-shadow:var(--sh);border:3px solid #fff
+}
+.node .dot.belum{background:#c7c9e6}
+.node .dot.terlambat{background:var(--rose)}
+.node .dot.menunggu{background:var(--amber)}
+.node .dot.revisi{background:#f97316}
+.node .dot.dinilai{background:var(--lime)}
+.node .body{background:var(--panel);border-radius:var(--r);box-shadow:var(--sh);padding:14px 16px;cursor:pointer;transition:.15s}
+.node .body:hover{transform:translateY(-2px);box-shadow:var(--sh-lg)}
+.node .t{font-weight:800;font-size:14.5px}
+.node .m{font-size:12px;color:var(--ink-soft);margin-top:3px}
+
+/* ---------- STATUS PILL ---------- */
+.st{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:800;
+  padding:4px 10px;border-radius:999px;white-space:nowrap}
+.st.belum{background:#eef0fb;color:#6b6f9c}
+.st.terlambat{background:#fee2e2;color:#b91c1c}
+.st.menunggu{background:#fef3c7;color:#b45309}
+.st.revisi{background:#ffedd5;color:#c2410c}
+.st.dinilai{background:#dcfce7;color:#15803d}
+
+/* ---------- GRADE CHIP ---------- */
+.grade{display:inline-flex;align-items:baseline;gap:6px;font-weight:800}
+.grade .huruf{font-size:20px;color:var(--brand-ink)}
+.grade .angka{font-size:13px;color:var(--ink-soft)}
+
+/* ---------- BUTTONS ---------- */
+.btn{border:0;cursor:pointer;border-radius:12px;padding:11px 18px;font-weight:800;font-size:14px;
+  display:inline-flex;align-items:center;gap:8px;transition:.15s}
+.btn-primary{background:linear-gradient(135deg,var(--brand),var(--brand-2));color:#fff;box-shadow:var(--sh)}
+.btn-primary:hover{filter:brightness(1.06)}
+.btn-ghost{background:var(--panel-2);color:var(--ink);border:1px solid var(--line)}
+.btn-ghost:hover{background:#ecedfb}
+.btn-danger{background:#fee2e2;color:#b91c1c}
+.btn-sm{padding:7px 12px;font-size:12.5px;border-radius:10px}
+.btn:disabled{opacity:.55;cursor:not-allowed}
+
+/* ---------- FORM ---------- */
+label.f{display:block;font-size:12.5px;font-weight:800;color:var(--ink-soft);margin:0 0 6px}
+.input,select.input,textarea.input{
+  width:100%;padding:11px 13px;border:1.5px solid var(--line);border-radius:12px;
+  font-size:14px;font-family:inherit;background:#fff;color:var(--ink);outline:none;transition:.15s
+}
+.input:focus{border-color:var(--brand);box-shadow:0 0 0 4px rgba(91,75,255,.12)}
+textarea.input{resize:vertical;min-height:80px}
+.field + .field{margin-top:14px}
+
+/* ---------- TABLE ---------- */
+.tbl-wrap{overflow-x:auto;border-radius:var(--r);border:1px solid var(--line)}
+table.tbl{width:100%;border-collapse:collapse;font-size:13.5px}
+table.tbl th{background:var(--panel-2);text-align:left;padding:11px 12px;font-weight:800;color:var(--ink-soft);
+  position:sticky;top:0;white-space:nowrap}
+table.tbl td{padding:10px 12px;border-top:1px solid var(--line)}
+table.tbl tr:hover td{background:#fafaff}
+
+/* ---------- DROPZONE ---------- */
+.dz{border:2px dashed var(--line);border-radius:var(--r);padding:26px;text-align:center;
+  background:var(--panel-2);cursor:pointer;transition:.15s}
+.dz.drag{border-color:var(--brand);background:#eef0ff}
+.dz .ic{font-size:34px}
+.file-row{display:flex;align-items:center;gap:10px;background:var(--panel-2);border:1px solid var(--line);
+  border-radius:12px;padding:9px 12px;margin-top:8px;font-size:13px}
+.file-row .grow{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.progress{height:6px;border-radius:999px;background:var(--line);overflow:hidden;margin-top:6px}
+.progress > i{display:block;height:100%;background:var(--brand);width:0}
+
+/* ---------- PREVIEW ---------- */
+.preview-box{background:#0b0e26;border-radius:var(--r);overflow:hidden;min-height:280px;display:grid;place-items:center}
+.preview-box iframe,.preview-box img,.preview-box video{width:100%;border:0;display:block}
+.preview-box iframe{height:70vh;background:#fff}
+.preview-box img{max-height:70vh;object-fit:contain}
+.preview-tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+.preview-tabs button{border:0;cursor:pointer;background:var(--panel-2);border:1px solid var(--line);
+  border-radius:999px;padding:6px 12px;font-size:12px;font-weight:700}
+.preview-tabs button.active{background:var(--brand);color:#fff;border-color:var(--brand)}
+
+/* ---------- MODAL ---------- */
+.overlay{position:fixed;inset:0;background:rgba(10,12,35,.6);backdrop-filter:blur(4px);
+  display:grid;place-items:center;padding:20px;z-index:60}
+.modal{background:var(--panel);border-radius:var(--r-lg);box-shadow:var(--sh-lg);
+  width:100%;max-width:640px;max-height:90vh;overflow:auto;padding:22px}
+.modal.lg{max-width:960px}
+.modal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+.modal-head h3{font-size:18px;font-weight:800}
+.x{border:0;background:var(--panel-2);width:34px;height:34px;border-radius:10px;cursor:pointer;font-size:16px}
+
+/* ---------- TOAST ---------- */
+#toasts{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:90;display:flex;
+  flex-direction:column;gap:8px;align-items:center}
+.toast{background:#111536;color:#fff;padding:11px 18px;border-radius:12px;font-size:13.5px;font-weight:700;
+  box-shadow:var(--sh-lg);animation:tin .2s ease}
+.toast.ok{background:#14532d}.toast.err{background:#7f1d1d}
+@keyframes tin{from{opacity:0;transform:translateY(8px)}}
+
+/* ---------- MISC ---------- */
+.loading{display:grid;place-items:center;padding:60px 0;color:#c7c9f5;font-weight:700;gap:12px}
+.spinner{width:38px;height:38px;border-radius:50%;border:4px solid rgba(255,255,255,.25);
+  border-top-color:#fff;animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.empty{text-align:center;color:var(--ink-soft);padding:40px 16px}
+.empty .ic{font-size:40px}
+.row-between{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.tag{display:inline-block;background:var(--panel-2);border:1px solid var(--line);border-radius:999px;
+  padding:3px 10px;font-size:11.5px;font-weight:700;color:var(--ink-soft)}
+.divider{height:1px;background:var(--line);margin:16px 0}
+.hl{color:var(--brand-ink);font-weight:800}
+</style>

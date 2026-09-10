@@ -1,0 +1,204 @@
+<script>
+/* ============================================================
+   Helper klien bersama - include('AppJS')
+   ============================================================ */
+
+/* --- google.script.run sebagai Promise --- */
+function grun(name){
+  var args = Array.prototype.slice.call(arguments, 1);
+  return new Promise(function(resolve, reject){
+    var runner = google.script.run
+      .withSuccessHandler(resolve)
+      .withFailureHandler(function(err){ reject(new Error(err && err.message ? err.message : String(err))); });
+    runner[name].apply(runner, args);
+  });
+}
+
+function sleep(ms){ return new Promise(function(r){ setTimeout(r, ms); }); }
+
+/* --- DOM --- */
+function $(sel, root){ return (root||document).querySelector(sel); }
+function $all(sel, root){ return Array.prototype.slice.call((root||document).querySelectorAll(sel)); }
+function esc(s){
+  return String(s==null?'':s).replace(/[&<>"']/g, function(c){
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+  });
+}
+function h(html){ var t=document.createElement('template'); t.innerHTML=html.trim(); return t.content.firstChild; }
+
+/* --- Toast --- */
+function toast(msg, tipe){
+  var box = $('#toasts'); if(!box){ box=document.createElement('div'); box.id='toasts'; document.body.appendChild(box); }
+  var t = document.createElement('div');
+  t.className = 'toast ' + (tipe||'');
+  t.textContent = msg;
+  box.appendChild(t);
+  setTimeout(function(){ t.style.opacity='0'; t.style.transition='opacity .3s'; setTimeout(function(){ t.remove(); }, 300); }, 3200);
+}
+
+/* --- Format tanggal --- */
+function fmtTgl(iso){
+  if(!iso) return '-';
+  var d = new Date(iso);
+  return d.toLocaleDateString('id-ID', { day:'numeric', month:'short', year:'numeric' });
+}
+function fmtTglJam(iso){
+  if(!iso) return '-';
+  var d = new Date(iso);
+  return d.toLocaleDateString('id-ID', { day:'numeric', month:'short', year:'numeric' }) +
+         ', ' + d.toLocaleTimeString('id-ID', { hour:'2-digit', minute:'2-digit' });
+}
+function sisaDeadline(iso){
+  if(!iso) return { label:'tanpa deadline', telat:false };
+  var ms = new Date(iso) - new Date();
+  var hari = Math.round(ms / 86400000);
+  if(ms < 0) return { label:'terlambat ' + Math.abs(hari) + ' hari', telat:true };
+  if(hari === 0) return { label:'hari ini', telat:false };
+  if(hari === 1) return { label:'besok', telat:false };
+  return { label:hari + ' hari lagi', telat:false };
+}
+function fmtUkuran(b){
+  b = Number(b)||0;
+  if(b < 1024) return b + ' B';
+  if(b < 1048576) return (b/1024).toFixed(0) + ' KB';
+  return (b/1048576).toFixed(1) + ' MB';
+}
+
+/* --- Konversi nilai (tabel dari server, di-set sekali) --- */
+var KONVERSI = [];
+function setKonversi(tabel){ KONVERSI = tabel || []; }
+function angkaKeHurufKlien(n){
+  n = parseFloat(n); if(isNaN(n)) return '';
+  for(var i=0;i<KONVERSI.length;i++){ if(n>=KONVERSI[i].min && n<=KONVERSI[i].max) return KONVERSI[i].huruf; }
+  return '';
+}
+
+/* ============================================================
+   UPLOAD BERKAS
+   - Coba resumable upload langsung ke Drive (file besar/video).
+   - Kalau gagal memulai (token/CORS), fallback ke base64 via server.
+   ============================================================ */
+var UPLOAD_MAKS_MB = 200;      // batas wajar per berkas
+var BATAS_BASE64 = 30 * 1048576; // di atas ini, base64 tidak dipakai
+
+/* ctx = { peran:'siswa'|'guru', token, tugasId, nis, onProgress(i,percent,name) }
+   Mengembalikan hasil finalisasi server: { sukses, pesan, submission } */
+async function uploadBerkas(files, ctx){
+  files = Array.prototype.slice.call(files);
+  files.forEach(function(f){
+    if(f.size === 0) throw new Error('Berkas "'+f.name+'" kosong (0 byte)');
+    if(f.size > UPLOAD_MAKS_MB*1048576) throw new Error('Berkas "'+f.name+'" melebihi '+UPLOAD_MAKS_MB+'MB');
+  });
+  var prog = ctx.onProgress || function(){};
+
+  var mintFn  = ctx.peran === 'siswa' ? 'mintUploadTugasSiswa' : 'mintUploadTugasGuru';
+  var mintArg = ctx.peran === 'siswa' ? [ctx.token, ctx.tugasId] : [ctx.tugasId, ctx.nis];
+
+  var mint = null;
+  try { mint = await grun.apply(null, [mintFn].concat(mintArg)); }
+  catch(e){ mint = { ok:false, pesan:e.message }; }
+
+  if(mint && mint.ok){
+    try{
+      var terunggah = [];
+      for(var j=0;j<files.length;j++){
+        var f = files[j];
+        var r = await resumableUpload(f, {
+          accessToken: mint.accessToken, folderId: mint.folderId, prefixNama: mint.prefixNama || '',
+          onProgress: (function(idx,nm){ return function(p){ prog(idx, p, nm); }; })(j, f.name)
+        });
+        terunggah.push(r);
+      }
+      var finFn  = ctx.peran === 'siswa' ? 'finalisasiUploadSiswa' : 'finalisasiUploadGuru';
+      var finArg = ctx.peran === 'siswa'
+        ? [ctx.token, ctx.tugasId, terunggah]
+        : [ctx.tugasId, ctx.nis, terunggah];
+      return await grun.apply(null, [finFn].concat(finArg));
+    }catch(err){
+      if(files.some(function(f){ return f.size > BATAS_BASE64; }))
+        throw new Error('Upload langsung gagal: ' + err.message);
+      // lanjut ke fallback base64
+    }
+  }
+
+  // ---- Fallback base64 (file kecil) ----
+  var payloadFiles = [];
+  for(var i=0;i<files.length;i++){
+    if(files[i].size > BATAS_BASE64)
+      throw new Error('Upload langsung tidak tersedia dan berkas terlalu besar untuk jalur cadangan.');
+    payloadFiles.push({
+      base64: await fileKeBase64(files[i]),
+      nama: files[i].name,
+      mime: files[i].type || 'application/octet-stream'
+    });
+    prog(i, 95, files[i].name);
+  }
+  var b64Fn = ctx.peran === 'siswa' ? 'uploadTugasKecil' : 'uploadTugasKecilOlehGuru';
+  var b64Payload = ctx.peran === 'siswa'
+    ? { token: ctx.token, tugasId: ctx.tugasId, files: payloadFiles }
+    : { tugasId: ctx.tugasId, nis: ctx.nis, files: payloadFiles };
+  return await grun(b64Fn, b64Payload);
+}
+
+function fileKeBase64(file){
+  return new Promise(function(resolve, reject){
+    var fr = new FileReader();
+    fr.onload = function(){ resolve(fr.result.split(',')[1]); };
+    fr.onerror = function(){ reject(new Error('Gagal membaca berkas')); };
+    fr.readAsDataURL(file);
+  });
+}
+
+async function resumableUpload(file, opt){
+  var meta = { name: (opt.prefixNama||'') + file.name, parents: [opt.folderId] };
+  var init = await fetch(
+    'https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&fields=id,name,mimeType,size&supportsAllDrives=true',
+    { method:'POST',
+      headers:{
+        'Authorization':'Bearer ' + opt.accessToken,
+        'Content-Type':'application/json; charset=UTF-8',
+        'X-Upload-Content-Type': file.type || 'application/octet-stream',
+        'X-Upload-Content-Length': String(file.size)
+      },
+      body: JSON.stringify(meta)
+    });
+  if(!init.ok) throw new Error('mulai upload gagal ('+init.status+')');
+  var sessionUrl = init.headers.get('Location') || init.headers.get('location');
+  if(!sessionUrl) throw new Error('server tidak memberi sesi upload');
+
+  var CHUNK = 8 * 1024 * 1024;
+  var start = 0, result = null;
+  while(start < file.size){
+    var end = Math.min(start + CHUNK, file.size);
+    var attempt = 0, done = false;
+    while(attempt < 4 && !done){
+      attempt++;
+      try{
+        var res = await fetch(sessionUrl, {
+          method:'PUT',
+          headers:{ 'Content-Range':'bytes ' + start + '-' + (end-1) + '/' + file.size },
+          body: file.slice(start, end)
+        });
+        if(res.status === 308){
+          var rng = res.headers.get('Range');
+          start = rng ? (parseInt(rng.split('-')[1],10) + 1) : end;
+          done = true;
+        } else if(res.ok){
+          result = await res.json(); start = file.size; done = true;
+        } else if(res.status >= 500 || res.status === 429){
+          await sleep(1200 * attempt);
+        } else {
+          throw new Error('chunk gagal ('+res.status+')');
+        }
+      } catch(e){
+        if(attempt >= 4) throw e;
+        await sleep(1200 * attempt);
+      }
+    }
+    if(opt.onProgress) opt.onProgress(Math.min(99, Math.round(start / file.size * 100)));
+  }
+  if(!result) throw new Error('upload selesai tanpa konfirmasi');
+  if(opt.onProgress) opt.onProgress(100);
+  return { id: result.id, nama: result.name, mime: result.mimeType, size: Number(result.size) || file.size };
+}
+</script>

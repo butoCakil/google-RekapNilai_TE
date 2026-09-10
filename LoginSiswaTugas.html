@@ -5,178 +5,58 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <?!= include('AppCSS') ?>
   <style>
-    :root {
-      --ink: #16241F;
-      --surface: #F4F7F5;
-      --surface-card: #FFFFFF;
-      --green: #1F6F4A;
-      --green-dark: #164F35;
-      --copper: #C87941;
-      --danger: #C0463C;
-      --slate: #5B6B66;
-      --border: #DCE5DF;
-    }
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      font-family: 'IBM Plex Sans', sans-serif;
-      background: var(--surface);
-      color: var(--ink);
-      min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 24px;
-    }
-    .trace {
-      position: fixed;
-      inset: 0;
-      pointer-events: none;
-      z-index: 0;
-    }
-    .kartu {
-      position: relative;
-      z-index: 1;
-      background: var(--surface-card);
-      border: 1px solid var(--border);
-      border-radius: 4px;
-      padding: 40px 36px;
-      width: 100%;
-      max-width: 360px;
-    }
-    .pin {
-      width: 36px;
-      height: 6px;
-      background: var(--copper);
-      border-radius: 3px;
-      margin-bottom: 20px;
-    }
-    h1 {
-      font-size: 22px;
-      font-weight: 700;
-      margin: 0 0 4px;
-      letter-spacing: -0.01em;
-    }
-    .sub {
-      font-size: 13px;
-      color: var(--slate);
-      margin: 0 0 28px;
-    }
-    label {
-      display: block;
-      font-size: 12px;
-      font-weight: 600;
-      color: var(--slate);
-      margin-bottom: 6px;
-      font-family: 'IBM Plex Mono', monospace;
-      letter-spacing: 0.02em;
-    }
-    input {
-      width: 100%;
-      padding: 11px 12px;
-      font-size: 15px;
-      font-family: 'IBM Plex Sans', sans-serif;
-      border: 1.5px solid var(--border);
-      border-radius: 4px;
-      margin-bottom: 18px;
-      background: var(--surface);
-      color: var(--ink);
-    }
-    input:focus {
-      outline: none;
-      border-color: var(--green);
-    }
-    button {
-      width: 100%;
-      padding: 12px;
-      font-size: 15px;
-      font-weight: 600;
-      font-family: 'IBM Plex Sans', sans-serif;
-      background: var(--green);
-      color: white;
-      border: none;
-      border-radius: 4px;
-      cursor: pointer;
-      transition: background 0.15s;
-    }
-    button:hover { background: var(--green-dark); }
-    button:disabled { background: var(--slate); cursor: not-allowed; }
-    .pesan-error {
-      font-size: 13px;
-      color: var(--danger);
-      margin: -8px 0 16px;
-      display: none;
-    }
+    body{display:grid;place-items:center;min-height:100vh;padding:24px}
+    .card-login{width:100%;max-width:380px;background:var(--panel);border-radius:var(--r-lg);
+      box-shadow:var(--sh-lg);padding:34px 30px}
+    .badge-top{width:56px;height:56px;border-radius:18px;display:grid;place-items:center;font-size:26px;
+      background:linear-gradient(135deg,var(--brand),var(--brand-2));box-shadow:var(--sh);margin-bottom:16px}
+    h1{font-size:21px;font-weight:800}
+    .sub{font-size:13px;color:var(--ink-soft);margin:2px 0 22px}
+    .err{font-size:13px;color:var(--rose);margin:-6px 0 12px;display:none}
   </style>
 </head>
 <body>
-  <svg class="trace" viewBox="0 0 800 600" preserveAspectRatio="xMidYMid slice">
-    <path d="M0,480 L160,480 L160,380 L340,380 L340,520 L800,520" fill="none" stroke="#1F6F4A" stroke-width="2" opacity="0.12"/>
-    <circle cx="160" cy="480" r="4" fill="#C87941" opacity="0.25"/>
-    <circle cx="340" cy="380" r="4" fill="#C87941" opacity="0.25"/>
-  </svg>
-
-  <div class="kartu">
-    <div class="pin"></div>
+  <div class="card-login">
+    <div class="badge-top">🎒</div>
     <h1>Portal Tugas Siswa</h1>
-    <p class="sub">Teknik Elektronika &middot; SMK Negeri Bansari</p>
+    <div class="sub">Teknik Elektronika · SMK Negeri Bansari</div>
 
-    <div id="pesanError" class="pesan-error"></div>
+    <div class="err" id="err"></div>
 
-    <label for="inputNis">NIS</label>
-    <input type="text" id="inputNis" inputmode="numeric" maxlength="4" placeholder="4 digit" autocomplete="off">
+    <div class="field"><label class="f">NIS</label>
+      <input class="input" id="nis" inputmode="numeric" maxlength="4" placeholder="4 digit" autocomplete="off"></div>
+    <div class="field"><label class="f">Password</label>
+      <input class="input" id="pw" type="password" autocomplete="off"></div>
 
-    <label for="inputPassword">Password</label>
-    <input type="password" id="inputPassword" autocomplete="off">
-
-    <button id="btnLogin" onclick="login()">Masuk</button>
+    <button class="btn btn-primary" id="btn" style="width:100%;margin-top:18px" onclick="login()">Masuk</button>
   </div>
 
   <script>
-    const SCRIPT_URL = '<?= scriptUrl ?>';
-
-    function login() {
-      const nis = document.getElementById('inputNis').value.trim();
-      const password = document.getElementById('inputPassword').value;
-      const btn = document.getElementById('btnLogin');
-      const pesanError = document.getElementById('pesanError');
-
-      pesanError.style.display = 'none';
-
-      if (!nis || !password) {
-        pesanError.textContent = 'NIS dan password wajib diisi';
-        pesanError.style.display = 'block';
-        return;
-      }
-
-      btn.disabled = true;
-      btn.textContent = 'Memeriksa...';
-
+    var SCRIPT_URL = '<?= scriptUrl ?>';
+    function login(){
+      var nis = document.getElementById('nis').value.trim();
+      var pw = document.getElementById('pw').value;
+      var err = document.getElementById('err');
+      var btn = document.getElementById('btn');
+      err.style.display = 'none';
+      if(!nis || !pw){ err.textContent = 'NIS dan password wajib diisi'; err.style.display = 'block'; return; }
+      btn.disabled = true; btn.textContent = 'Memeriksa…';
       google.script.run
-        .withSuccessHandler(function (hasil) {
-          if (hasil.sukses) {
-            top.location.href = SCRIPT_URL + '?page=dashboardTugas&token=' + hasil.token;
-          } else {
-            pesanError.textContent = hasil.pesan;
-            pesanError.style.display = 'block';
-            btn.disabled = false;
-            btn.textContent = 'Masuk';
-          }
+        .withSuccessHandler(function(r){
+          if(r.sukses){ top.location.href = SCRIPT_URL + '?page=tugas&token=' + r.token; }
+          else { err.textContent = r.pesan; err.style.display = 'block'; btn.disabled = false; btn.textContent = 'Masuk'; }
         })
-        .withFailureHandler(function (err) {
-          pesanError.textContent = 'Terjadi kesalahan: ' + err.message;
-          pesanError.style.display = 'block';
-          btn.disabled = false;
-          btn.textContent = 'Masuk';
+        .withFailureHandler(function(e){
+          err.textContent = 'Kesalahan: ' + e.message; err.style.display = 'block';
+          btn.disabled = false; btn.textContent = 'Masuk';
         })
-        .loginSiswaTugas(nis, password);
+        .loginSiswaTugas(nis, pw);
     }
-
-    document.getElementById('inputPassword').addEventListener('keydown', function (e) {
-      if (e.key === 'Enter') login();
-    });
+    document.getElementById('pw').addEventListener('keydown', function(e){ if(e.key === 'Enter') login(); });
   </script>
 </body>
 </html>

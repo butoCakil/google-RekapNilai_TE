@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <?!= include('AppCSS') ?>
+  <style>
+    .lead{width:26px;height:26px;border-radius:8px;display:inline-grid;place-items:center;font-weight:800;
+      font-size:12px;background:var(--panel-2);color:var(--ink-soft)}
+    .lead.g1{background:#fef9c3;color:#a16207}.lead.g2{background:#e5e7eb;color:#4b5563}.lead.g3{background:#fde4cf;color:#9a3412}
+    .mini-grade{width:64px;text-align:center;padding:6px;border:1.5px solid var(--line);border-radius:9px;font-weight:800}
+    .cell-st{font-size:11px;font-weight:800;padding:3px 7px;border-radius:6px}
+    .grid-2col{display:grid;grid-template-columns:1.3fr 1fr;gap:18px}
+    @media(max-width:860px){.grid-2col{grid-template-columns:1fr}}
+    .letter-btns{display:flex;gap:6px;flex-wrap:wrap}
+    .letter-btns button{border:1.5px solid var(--line);background:#fff;border-radius:9px;padding:8px 12px;font-weight:800;cursor:pointer}
+    .letter-btns button.on{background:var(--brand);color:#fff;border-color:var(--brand)}
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="brand"><span class="logo">📚</span> <span>Dashboard Guru — Tugas TE</span></div>
+    <div class="spacer"></div>
+    <div class="chip-user"><span id="gNama"></span><span class="avatar" id="gAv"></span></div>
+  </div>
+
+  <div class="app">
+    <div class="nav" id="nav">
+      <button data-view="ringkasan">🏠 Ringkasan</button>
+      <button data-view="tugas">🗂️ Tugas</button>
+      <button data-view="rekap">📋 Rekap & Koreksi</button>
+      <button data-view="pemantauan">🔍 Pemantauan</button>
+      <button data-view="unduh">⬇️ Unduh</button>
+      <div style="flex:1"></div>
+      <button onclick="keluar()">🚪 Keluar</button>
+    </div>
+    <div id="view"><div class="loading"><div class="spinner"></div>Memuat…</div></div>
+  </div>
+
+  <div id="toasts"></div>
+  <div id="modal-root"></div>
+
+  <?!= include('AppJS') ?>
+  <script>
+    var SCRIPT_URL = '<?= scriptUrl ?>';
+    var GURU = <?!= guruJson ?>;
+    var KELAS = [];
+
+    document.getElementById('gNama').textContent = GURU.nama;
+    document.getElementById('gAv').textContent = (GURU.nama||'?').trim().charAt(0).toUpperCase();
+    grun('getKonversiNilai').then(setKonversi).catch(function(){});
+    grun('getDataKelas').then(function(k){ KELAS = k || []; }).catch(function(){});
+
+    window.addEventListener('hashchange', route);
+    $all('#nav button[data-view]').forEach(function(b){ b.onclick = function(){ location.hash = '#/' + b.dataset.view; }; });
+    function route(){
+      var v = location.hash.replace(/^#\/?/, '') || 'ringkasan';
+      var view = v.split('/')[0];
+      $all('#nav button[data-view]').forEach(function(b){ b.classList.toggle('active', b.dataset.view === view); });
+      ({ ringkasan:renderRingkasan, tugas:renderTugas, rekap:renderRekap, pemantauan:renderPemantauan, unduh:renderUnduh }[view] || renderRingkasan)();
+    }
+    function setView(html){ document.getElementById('view').innerHTML = html; }
+    function loading(t){ setView('<div class="loading"><div class="spinner"></div>' + (t || 'Memuat…') + '</div>'); }
+    function keluar(){ top.location.href = SCRIPT_URL; }
+    function statTile(k, v, ic){ return '<div class="stat"><div class="ic">' + ic + '</div><div class="k">' + k + '</div><div class="v">' + v + '</div></div>'; }
+    function errBox(e){ return '<div class="panel"><div class="empty"><div class="ic">⚠️</div>' + esc(e && e.message || e) +
+      '<br><button class="btn btn-ghost btn-sm" style="margin-top:10px" onclick="route()">Coba lagi</button></div></div>'; }
+    function opsiKelas(sel){ return '<option value="">— pilih kelas —</option>' +
+      KELAS.map(function(k){ return '<option ' + (k === sel ? 'selected' : '') + '>' + esc(k) + '</option>'; }).join(''); }
+
+    // ============ MODAL ============
+    function modal(html, lg){
+      var root = document.getElementById('modal-root');
+      root.innerHTML = '<div class="overlay" id="ov"><div class="modal ' + (lg ? 'lg' : '') + '">' + html + '</div></div>';
+      document.getElementById('ov').onclick = function(e){ if(e.target.id === 'ov') tutupModal(); };
+    }
+    function tutupModal(){ document.getElementById('modal-root').innerHTML = ''; }
+
+    // ============ RINGKASAN ============
+    function renderRingkasan(){
+      loading();
+      grun('getRingkasanGuru').then(function(d){
+        if(!d){ return keluar(); }
+        var perKelas = d.perKelas.map(function(k){
+          return '<div class="card-flat"><div class="row-between"><b>' + esc(k.kelas) + '</b>' +
+            (k.belumDinilai ? '<span class="st menunggu">' + k.belumDinilai + ' perlu dinilai</span>' : '<span class="st dinilai">beres</span>') +
+            '</div><div class="small muted" style="margin-top:6px">' + k.tugas + ' tugas • ' + k.submit + ' kumpulan</div></div>';
+        }).join('') || '<div class="empty small">Belum ada tugas. Buat lewat menu Tugas.</div>';
+
+        var aktivitas = d.aktivitas.length ? d.aktivitas.map(function(a){
+          return '<div class="file-row" style="white-space:normal"><span>📤</span><div class="grow" style="white-space:normal">' +
+            '<b>' + esc(a.nama) + '</b> (' + esc(a.kelas) + ') mengumpulkan <span class="hl">' + esc(a.tugas) + '</span>' +
+            '<div class="small muted">' + fmtTglJam(a.waktu) + ' • ' + esc(a.status) + '</div></div>' +
+            '<button class="btn btn-ghost btn-sm" onclick="location.hash=\'#/rekap/' + a.tugasId + '\'">Koreksi</button></div>';
+        }).join('') : '<div class="empty small">Belum ada aktivitas.</div>';
+
+        setView(
+          '<div class="hero-xp"><div class="level-badge"><b>' + d.totalTugas + '</b><span>TUGAS</span></div>' +
+            '<div class="xp-wrap"><strong style="font-size:16px">Halo, ' + esc(GURU.nama) + ' 👋</strong>' +
+            '<div class="pill-row"><span class="pill">🗂️ ' + d.tugasAktif + ' aktif</span>' +
+            '<span class="pill">📥 ' + d.totalSubmit + ' kumpulan</span>' +
+            '<span class="pill">✍️ ' + d.perluDinilai + ' perlu dinilai</span></div></div></div>' +
+          '<div class="grid cols-3" style="margin-top:16px">' +
+            statTile('Total kumpulan', d.totalSubmit, '📥') +
+            statTile('Perlu dinilai', d.perluDinilai, '✍️') +
+            statTile('Tugas aktif', d.tugasAktif, '🗂️') + '</div>' +
+          '<div class="grid-2col" style="margin-top:18px">' +
+            '<div class="panel"><div class="section-title">🕒 Aktivitas terbaru</div>' + aktivitas + '</div>' +
+            '<div class="panel"><div class="section-title">🏫 Per kelas</div><div class="grid" style="gap:10px">' + perKelas + '</div></div>' +
+          '</div>');
+      }).catch(function(e){ setView(errBox(e)); });
+    }
+
+    // ============ TUGAS ============
+    function renderTugas(){
+      loading();
+      grun('getDaftarTugasGuru').then(function(list){
+        var cards = list.length ? list.map(function(t){
+          var sd = sisaDeadline(t.deadline);
+          return '<div class="card"><div class="row-between">' +
+            '<div><div style="font-weight:800;font-size:15px">' + esc(t.judul) + '</div>' +
+              '<div class="small muted">' + esc(t.kelas) + ' • deadline ' + fmtTgl(t.deadline) + ' • ' + sd.label +
+              ' • nilai ' + t.jenisPenilaian + (t.status === 'Arsip' ? ' • <b>arsip</b>' : '') + '</div></div>' +
+            '<div style="display:flex;gap:6px;flex-wrap:wrap">' +
+              '<button class="btn btn-ghost btn-sm" onclick="location.hash=\'#/rekap/' + t.id + '\'">Rekap</button>' +
+              '<button class="btn btn-ghost btn-sm" data-edit="' + t.id + '">Edit</button>' +
+              '<button class="btn btn-ghost btn-sm" data-arsip="' + t.id + '">' + (t.status === 'Arsip' ? 'Aktifkan' : 'Arsip') + '</button>' +
+              '<button class="btn btn-danger btn-sm" data-hapus="' + t.id + '">Hapus</button>' +
+            '</div></div>' +
+            '<div class="pill-row" style="margin-top:12px">' +
+              barPill('📥 ' + t.totalSubmit + '/' + t.totalSiswa + ' terkumpul') +
+              barPill('✍️ ' + t.belumDinilai + ' belum dinilai') +
+              barPill('✅ ' + t.sudahDinilai + ' dinilai') +
+            '</div></div>';
+        }).join('') : '<div class="empty"><div class="ic">🗂️</div>Belum ada tugas.</div>';
+
+        setView('<div class="panel"><div class="row-between"><div class="section-title" style="margin:0">🗂️ Daftar Tugas</div>' +
+          '<button class="btn btn-primary" onclick="formTugas()">+ Buat tugas</button></div>' +
+          '<div class="grid" style="margin-top:14px;gap:12px">' + cards + '</div></div>');
+
+        $all('[data-edit]').forEach(function(b){ b.onclick = function(){ formTugas(list.find(function(x){ return x.id === b.dataset.edit; })); }; });
+        $all('[data-hapus]').forEach(function(b){ b.onclick = function(){
+          if(confirm('Hapus tugas ini beserta seluruh data kumpulannya? Berkas di Drive tetap ada.'))
+            grun('hapusTugas', b.dataset.hapus).then(function(r){ toast(r.pesan, r.sukses ? 'ok' : 'err'); renderTugas(); });
+        }; });
+        $all('[data-arsip]').forEach(function(b){ b.onclick = function(){
+          var t = list.find(function(x){ return x.id === b.dataset.arsip; });
+          grun('setStatusTugas', b.dataset.arsip, t.status === 'Arsip' ? 'Aktif' : 'Arsip')
+            .then(function(r){ toast(r.pesan, r.sukses ? 'ok' : 'err'); renderTugas(); });
+        }; });
+      }).catch(function(e){ setView(errBox(e)); });
+    }
+    function barPill(txt){ return '<span class="tag">' + txt + '</span>'; }
+
+    function formTugas(t){
+      t = t || {};
+      var edit = !!t.id;
+      var dl = t.deadline ? new Date(t.deadline) : null;
+      var dlVal = dl ? new Date(dl.getTime() - dl.getTimezoneOffset() * 60000).toISOString().slice(0, 16) : '';
+      modal(
+        '<div class="modal-head"><h3>' + (edit ? 'Edit tugas' : 'Buat tugas baru') + '</h3><button class="x" onclick="tutupModal()">✕</button></div>' +
+        '<div class="field"><label class="f">Judul</label><input class="input" id="tJudul" value="' + esc(t.judul || '') + '"></div>' +
+        '<div class="field"><label class="f">Narasi / instruksi tugas</label><textarea class="input" id="tDesk" rows="5">' + esc(t.deskripsi || '') + '</textarea></div>' +
+        '<div class="grid cols-2" style="margin-top:14px">' +
+          '<div><label class="f">Kelas</label><select class="input" id="tKelas">' + opsiKelas(t.kelas) + '</select></div>' +
+          '<div><label class="f">Deadline</label><input class="input" type="datetime-local" id="tDeadline" value="' + dlVal + '"></div>' +
+        '</div>' +
+        '<div class="grid cols-2" style="margin-top:14px">' +
+          '<div><label class="f">Jenis penilaian</label><select class="input" id="tJenis">' +
+            '<option value="angka"' + (t.jenisPenilaian === 'angka' ? ' selected' : '') + '>Angka (0–100)</option>' +
+            '<option value="huruf"' + (t.jenisPenilaian === 'huruf' ? ' selected' : '') + '>Huruf (A, A-, B+ …)</option></select></div>' +
+          '<div><label class="f">Link berkas materi (opsional)</label><input class="input" id="tLampiran" placeholder="URL Google Drive" value="' + esc(t.lampiranUrl || '') + '"></div>' +
+        '</div>' +
+        '<div style="margin-top:18px;display:flex;gap:8px;justify-content:flex-end">' +
+          '<button class="btn btn-ghost" onclick="tutupModal()">Batal</button>' +
+          '<button class="btn btn-primary" id="tSimpan">' + (edit ? 'Simpan' : 'Buat') + '</button></div>'
+      );
+      document.getElementById('tSimpan').onclick = function(){
+        var p = {
+          id: t.id, judul: $('#tJudul').value.trim(), deskripsi: $('#tDesk').value.trim(),
+          kelas: $('#tKelas').value, deadline: $('#tDeadline').value,
+          jenisPenilaian: $('#tJenis').value, lampiranUrl: $('#tLampiran').value.trim()
+        };
+        if(!p.judul || !p.kelas || !p.deadline) return toast('Judul, kelas, deadline wajib diisi', 'err');
+        this.disabled = true;
+        grun(edit ? 'editTugas' : 'buatTugas', p).then(function(r){
+          toast(r.pesan, r.sukses ? 'ok' : 'err');
+          if(r.sukses){ tutupModal(); renderTugas(); }
+        }).catch(function(e){ toast(e.message, 'err'); });
+      };
+    }
+
+    // ============ REKAP & KOREKSI ============
+    function renderRekap(){
+      var pre = location.hash.split('/')[2];
+      if(pre) return rekapTugas(pre);
+      loading();
+      grun('getDaftarTugasGuru').then(function(list){
+        var byKelas = {};
+        list.forEach(function(t){ (byKelas[t.kelas] = byKelas[t.kelas] || []).push(t); });
+        var blocks = Object.keys(byKelas).sort().map(function(k){
+          return '<div class="panel"><div class="section-title">🏫 ' + esc(k) + '</div><div class="grid" style="gap:10px">' +
+            byKelas[k].map(function(t){
+              return '<div class="card-flat row-between"><div><b>' + esc(t.judul) + '</b>' +
+                '<div class="small muted">' + t.totalSubmit + '/' + t.totalSiswa + ' terkumpul • ' + t.belumDinilai + ' belum dinilai</div></div>' +
+                '<button class="btn btn-ghost btn-sm" onclick="location.hash=\'#/rekap/' + t.id + '\'">Buka</button></div>';
+            }).join('') + '</div></div>';
+        }).join('') || '<div class="empty">Belum ada tugas.</div>';
+        setView(blocks);
+      }).catch(function(e){ setView(errBox(e)); });
+    }
+
+    function rekapTugas(tugasId){
+      loading('Memuat rekap…');
+      grun('getRekapTugas', tugasId).then(function(d){
+        if(!d.tugas){ toast('Tugas tidak ditemukan', 'err'); location.hash = '#/rekap'; return; }
+        var t = d.tugas, s = d.statistik;
+        var rows = d.siswa.map(function(r, i){
+          var sub = r.submission;
+          var stCls = sub ? (sub.status === 'Dinilai' ? 'dinilai' : (sub.status === 'Revisi' ? 'revisi' : 'menunggu')) : 'belum';
+          return '<tr>' +
+            '<td>' + (i + 1) + '</td><td>' + esc(r.nis) + '</td><td>' + esc(r.nama) + '</td>' +
+            '<td><span class="st ' + stCls + '">' + esc(r.status) + '</span></td>' +
+            '<td>' + (sub && sub.waktuUpload ? fmtTgl(sub.waktuUpload) : '–') + '</td>' +
+            '<td>' + (sub && sub.nilaiAngka != null
+                ? '<span class="grade"><span class="huruf">' + esc(sub.nilaiHuruf || '') + '</span> <span class="angka">' + sub.nilaiAngka + '</span></span>'
+                : '–') + '</td>' +
+            '<td style="display:flex;gap:5px;flex-wrap:wrap">' +
+              (sub ? '<button class="btn btn-primary btn-sm" data-koreksi="' + sub.id + '">Koreksi</button>' : '') +
+              '<button class="btn btn-ghost btn-sm" data-upload="' + r.nis + '|' + esc(r.nama) + '">Unggah</button>' +
+            '</td></tr>';
+        }).join('');
+
+        setView(
+          '<div class="panel"><button class="btn btn-ghost btn-sm" onclick="location.hash=\'#/rekap\'">← Semua tugas</button>' +
+            '<div class="quest-hd" style="margin-top:10px"><h2 class="h-hero" style="color:var(--ink)">' + esc(t.judul) + '</h2>' +
+            '<div class="small muted">' + esc(t.kelas) + ' • deadline ' + fmtTglJam(t.deadline) + ' • penilaian ' + t.jenisPenilaian + '</div></div>' +
+            (t.deskripsi ? '<div class="card-flat" style="white-space:pre-wrap;margin-top:10px">' + esc(t.deskripsi) + '</div>' : '') +
+            '<div class="grid cols-4" style="margin-top:14px">' +
+              statTile('Total siswa', s.total, '👥') + statTile('Terkumpul', s.terkumpul, '📥') +
+              statTile('Dinilai', s.dinilai, '✅') + statTile('Revisi', s.revisi, '🔁') + '</div>' +
+            '<div class="tbl-wrap" style="margin-top:16px"><table class="tbl"><thead><tr>' +
+              '<th>#</th><th>NIS</th><th>Nama</th><th>Status</th><th>Upload</th><th>Nilai</th><th>Aksi</th>' +
+              '</tr></thead><tbody>' + rows + '</tbody></table></div></div>');
+
+        window.__rekap = d;
+        $all('[data-koreksi]').forEach(function(b){ b.onclick = function(){ panelKoreksi(b.dataset.koreksi, t); }; });
+        $all('[data-upload]').forEach(function(b){ b.onclick = function(){
+          var p = b.dataset.upload.split('|'); modalUploadGuru(t, p[0], p[1]);
+        }; });
+      }).catch(function(e){ setView(errBox(e)); });
+    }
+
+    // ---- Panel koreksi ----
+    function panelKoreksi(submissionId, tugas){
+      var d = window.__rekap;
+      var row = d.siswa.find(function(r){ return r.submission && r.submission.id === submissionId; });
+      var sub = row.submission;
+      var huruf = tugas.jenisPenilaian === 'huruf';
+      modal(
+        '<div class="modal-head"><h3>Koreksi — ' + esc(row.nama) + '</h3><button class="x" onclick="tutupModal()">✕</button></div>' +
+        '<div class="grid-2col">' +
+          '<div><div class="preview-box" id="kPrev" style="min-height:340px"></div>' +
+            '<div class="small muted" id="kMeta" style="margin-top:6px"></div></div>' +
+          '<div>' +
+            '<label class="f">Status</label>' +
+            '<div class="letter-btns" style="margin-bottom:14px">' +
+              '<button data-st="Dinilai" class="on">✅ Dinilai</button>' +
+              '<button data-st="Revisi">🔁 Minta revisi</button></div>' +
+            '<div id="blokNilai">' +
+              '<label class="f">Nilai (' + (huruf ? 'huruf' : 'angka 0–100') + ')</label>' +
+              (huruf
+                ? '<div class="letter-btns" id="letterPick">' + KONVERSI.map(function(k){ return '<button data-h="' + k.huruf + '">' + k.huruf + '</button>'; }).join('') + '</div>'
+                : '<input class="input" id="nAngka" type="number" min="0" max="100" value="' + (sub.nilaiAngka != null ? sub.nilaiAngka : '') + '">') +
+              '<div class="small muted" id="nKonv" style="margin-top:6px"></div>' +
+            '</div>' +
+            '<div class="field"><label class="f">Catatan / komentar</label>' +
+              '<textarea class="input" id="kCatatan" rows="4">' + esc(sub.catatan || '') + '</textarea></div>' +
+            '<button class="btn btn-primary" id="kSimpan" style="margin-top:14px;width:100%">Simpan koreksi</button>' +
+          '</div></div>', true);
+
+      var stStatus = 'Dinilai';
+      var nilaiHuruf = sub.nilaiHuruf || '';
+      $all('.letter-btns [data-st]').forEach(function(b){ b.onclick = function(){
+        stStatus = b.dataset.st;
+        $all('.letter-btns [data-st]').forEach(function(x){ x.classList.toggle('on', x === b); });
+        $('#blokNilai').style.display = stStatus === 'Dinilai' ? '' : 'none';
+      }; });
+
+      function konv(){
+        var el = $('#nKonv'); if(!el) return;
+        if(huruf){ el.textContent = nilaiHuruf ? ('≈ angka ' + (hurufKeAngkaKlien(nilaiHuruf))) : ''; }
+        else { var v = parseFloat($('#nAngka').value); el.textContent = isNaN(v) ? '' : ('≈ huruf ' + angkaKeHurufKlien(v)); }
+      }
+      if(huruf){
+        $all('#letterPick button').forEach(function(b){
+          if(b.dataset.h === nilaiHuruf) b.classList.add('on');
+          b.onclick = function(){ nilaiHuruf = b.dataset.h;
+            $all('#letterPick button').forEach(function(x){ x.classList.toggle('on', x === b); }); konv(); };
+        });
+      } else { $('#nAngka').oninput = konv; }
+      konv();
+
+      var stage = $('#kPrev'), meta = $('#kMeta');
+      grun('getPreviewBanyak', sub.lampiran.map(function(l){ return l.id; })).then(function(list){
+        list = (list || []).filter(function(p){ return p && p.ok; });
+        if(!list.length){ stage.innerHTML = '<div class="small" style="color:#fff">Tidak ada pratinjau</div>'; return; }
+        var idx = 0;
+        function show(i){
+          idx = i; var p = list[i];
+          meta.innerHTML = list.map(function(x, j){ return '<a href="#" data-j="' + j + '" style="' + (j === i ? 'font-weight:800' : '') + '">' + esc(x.nama) + '</a>'; }).join(' · ') +
+            ' — <a href="' + esc(p.urlBuka) + '" target="_blank">Drive ↗</a>';
+          if(p.mode === 'gambar') stage.innerHTML = '<img src="' + esc(p.urlLangsung) + '">';
+          else if(p.mode === 'video') stage.innerHTML = '<iframe src="' + esc(p.urlPreview) + '" allowfullscreen></iframe>';
+          else if(p.mode === 'teks' && p.teks != null) stage.innerHTML = '<pre style="margin:0;padding:14px;background:#fff;max-height:60vh;overflow:auto;white-space:pre-wrap;width:100%">' + esc(p.teks) + '</pre>';
+          else stage.innerHTML = '<iframe src="' + esc(p.urlPreview) + '"></iframe>';
+          $all('#kMeta a[data-j]').forEach(function(a){ a.onclick = function(e){ e.preventDefault(); show(+a.dataset.j); }; });
+        }
+        show(0);
+      });
+
+      $('#kSimpan').onclick = function(){
+        var payload = { submissionId: submissionId, status: stStatus, catatan: $('#kCatatan').value.trim() };
+        if(stStatus === 'Dinilai'){
+          payload.tipeInput = huruf ? 'huruf' : 'angka';
+          payload.nilai = huruf ? nilaiHuruf : $('#nAngka').value;
+          if(payload.nilai === '' || payload.nilai == null) return toast('Isi nilai dulu', 'err');
+        }
+        this.disabled = true;
+        grun('simpanKoreksi', payload).then(function(r){
+          toast(r.pesan, r.sukses ? 'ok' : 'err');
+          if(r.sukses){ tutupModal(); rekapTugas(tugas.id); }
+          else { $('#kSimpan').disabled = false; }
+        }).catch(function(e){ toast(e.message, 'err'); $('#kSimpan').disabled = false; });
+      };
+    }
+
+    function hurufKeAngkaKlien(huruf){
+      var k = KONVERSI.find(function(x){ return x.huruf === huruf; });
+      return k ? Math.round((k.min + k.max) / 2) : '?';
+    }
+
+    // ---- Upload atas nama siswa ----
+    var _guruFiles = [];
+    function modalUploadGuru(tugas, nis, nama){
+      _guruFiles = [];
+      modal('<div class="modal-head"><h3>Unggah untuk ' + esc(nama) + '</h3><button class="x" onclick="tutupModal()">✕</button></div>' +
+        '<div class="small muted" style="margin-bottom:10px">Tugas: <b>' + esc(tugas.judul) + '</b> • ' + esc(tugas.kelas) + ' • NIS ' + esc(nis) + '</div>' +
+        '<div class="dz" id="gdz"><div class="ic">📁</div><div style="font-weight:800;margin-top:6px">Pilih berkas siswa</div></div>' +
+        '<input type="file" id="gInput" multiple hidden><div id="gList"></div>' +
+        '<button class="btn btn-primary" id="gKirim" style="margin-top:14px;width:100%" disabled>Unggah</button>');
+      var dz = $('#gdz'), input = $('#gInput'), list = $('#gList'), btn = $('#gKirim');
+      dz.onclick = function(){ input.click(); };
+      input.onchange = function(){ Array.prototype.slice.call(input.files).forEach(function(f){ _guruFiles.push(f); }); input.value = ''; draw(); };
+      function draw(){
+        list.innerHTML = _guruFiles.map(function(f, i){
+          return '<div class="file-row"><span>📄</span><span class="grow">' + esc(f.name) + '</span><span class="small muted">' + fmtUkuran(f.size) + '</span>' +
+            '<button class="x" data-i="' + i + '" style="width:24px;height:24px">✕</button>' +
+            '<div class="progress" style="flex-basis:100%"><i data-p="' + i + '"></i></div></div>';
+        }).join('');
+        $all('#gList .x').forEach(function(x){ x.onclick = function(){ _guruFiles.splice(+x.dataset.i, 1); draw(); }; });
+        btn.disabled = !_guruFiles.length;
+      }
+      btn.onclick = function(){
+        btn.disabled = true; btn.textContent = 'Mengunggah…';
+        uploadBerkas(_guruFiles, { peran:'guru', tugasId: tugas.id, nis: nis,
+          onProgress: function(i, p){ var b = $('[data-p="' + i + '"]'); if(b) b.style.width = p + '%'; } })
+        .then(function(r){
+          if(r && r.sukses){ toast('Berkas terunggah', 'ok'); tutupModal(); rekapTugas(tugas.id); }
+          else { toast((r && r.pesan) || 'Gagal', 'err'); btn.disabled = false; btn.textContent = 'Unggah'; }
+        }).catch(function(e){ toast(e.message, 'err'); btn.disabled = false; btn.textContent = 'Unggah'; });
+      };
+    }
+
+    // ============ PEMANTAUAN ============
+    function renderPemantauan(){
+      setView('<div class="panel"><div class="section-title">🔍 Pemantauan Kelas</div>' +
+        '<select class="input" id="pKelas" style="max-width:280px" onchange="muatPemantauan(this.value)">' + opsiKelas() + '</select>' +
+        '<div id="pIsi" style="margin-top:16px"><div class="empty small">Pilih kelas untuk melihat pemantauan.</div></div></div>');
+    }
+    function muatPemantauan(kelas){
+      if(!kelas) return;
+      var isi = $('#pIsi'); isi.innerHTML = '<div class="loading"><div class="spinner"></div>Menghitung…</div>';
+      grun('getPemantauan', kelas).then(function(d){
+        if(!d){ isi.innerHTML = errBox('gagal'); return; }
+        function papan(judul, arr, kolom, ic){
+          if(!arr.length) return '';
+          return '<div class="panel"><div class="section-title">' + ic + ' ' + judul + '</div>' +
+            arr.map(function(s, i){
+              return '<div class="file-row"><span class="lead ' + (i < 3 ? 'g' + (i + 1) : '') + '">' + (i + 1) + '</span>' +
+                '<div class="grow" style="white-space:normal"><b>' + esc(s.nama) + '</b> <span class="small muted">' + esc(s.nis) + '</span></div>' +
+                '<span class="tag">' + kolom(s) + '</span></div>';
+            }).join('') + '</div>';
+        }
+        isi.innerHTML =
+          '<div class="grid cols-3">' +
+            statTile('Total tugas', d.totalTugas, '🗂️') +
+            statTile('Belum kumpul (siswa)', d.belumSubmit.length, '⏳') +
+            statTile('Perlu dinilai (siswa)', d.perluDinilai.length, '✍️') + '</div>' +
+          '<div class="grid-2col" style="margin-top:16px">' +
+            papan('Paling rajin', d.palingRajin, function(s){ return '🔥' + s.streak + ' • ' + s.terkumpul + ' tugas • XP ' + s.xp; }, '🏅') +
+            papan('Paling perlu perhatian', d.palingMalas, function(s){ return s.belumSubmit + ' belum • XP ' + s.xp; }, '🐌') +
+            papan('Nilai tertinggi', d.nilaiTertinggi, function(s){ return '⭐ ' + s.rataNilai; }, '📈') +
+            papan('Nilai terendah', d.nilaiTerendah, function(s){ return '⭐ ' + s.rataNilai; }, '📉') +
+            papan('Belum mengumpulkan', d.belumSubmit, function(s){ return s.belumSubmit + ' / ' + s.totalTugas; }, '⏳') +
+            papan('Belum diperiksa', d.perluDinilai, function(s){ return s.belumDinilai + ' menunggu'; }, '✍️') +
+          '</div>' +
+          '<div class="panel" style="margin-top:16px"><div class="section-title">📊 Semua siswa (urut XP)</div>' +
+            '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>#</th><th>Nama</th><th>Lvl</th><th>XP</th><th>Terkumpul</th>' +
+            '<th>Tepat waktu</th><th>Dinilai</th><th>Rata nilai</th></tr></thead><tbody>' +
+            d.siswa.map(function(s, i){
+              return '<tr><td>' + (i + 1) + '</td><td>' + esc(s.nama) + '</td><td>' + s.level + '</td><td>' + s.xp + '</td>' +
+                '<td>' + s.terkumpul + '/' + s.totalTugas + '</td><td>' + s.rasioTepatWaktu + '%</td><td>' + s.dinilai + '</td>' +
+                '<td>' + (s.rataNilai == null ? '–' : s.rataNilai) + '</td></tr>';
+            }).join('') + '</tbody></table></div></div>';
+      }).catch(function(e){ isi.innerHTML = errBox(e); });
+    }
+
+    // ============ UNDUH ============
+    function renderUnduh(){
+      setView('<div class="panel"><div class="section-title">⬇️ Unduh Rekap</div>' +
+        '<p class="muted small">Rekap dibuat sebagai Google Spreadsheet rapi (bisa diunduh sebagai Excel).</p>' +
+        '<div class="grid cols-2" style="margin-top:10px">' +
+          '<div class="card-flat"><label class="f">Per kelas</label><select class="input" id="uKelas">' + opsiKelas() + '</select>' +
+            '<button class="btn btn-primary" style="margin-top:10px" onclick="buatUnduh({mode:\'kelas\',kelas:$(\'#uKelas\').value})">Buat rekap kelas</button></div>' +
+          '<div class="card-flat"><label class="f">Semua kelas</label><p class="small muted">Satu file, satu sheet per kelas.</p>' +
+            '<button class="btn btn-primary" style="margin-top:10px" onclick="buatUnduh({mode:\'semua\'})">Buat rekap lengkap</button></div>' +
+        '</div><div id="uHasil" style="margin-top:16px"></div>' +
+        '<div class="section-title" style="margin-top:22px">Per tugas</div><div id="uTugasList" class="grid" style="gap:10px"></div></div>');
+      grun('getDaftarTugasGuru').then(function(list){
+        $('#uTugasList').innerHTML = list.map(function(t){
+          return '<div class="card-flat row-between"><div><b>' + esc(t.judul) + '</b> <span class="small muted">' + esc(t.kelas) + '</span></div>' +
+            '<button class="btn btn-ghost btn-sm" onclick="buatUnduh({mode:\'tugas\',tugasId:\'' + t.id + '\'})">Rekap</button></div>';
+        }).join('') || '<div class="empty small">Belum ada tugas.</div>';
+      });
+    }
+    function buatUnduh(payload){
+      if(payload.mode === 'kelas' && !payload.kelas) return toast('Pilih kelas dulu', 'err');
+      var box = $('#uHasil'); box.innerHTML = '<div class="loading"><div class="spinner"></div>Menyusun rekap…</div>';
+      grun('buatRekapSpreadsheet', payload).then(function(r){
+        if(!r.sukses){ box.innerHTML = ''; return toast(r.pesan, 'err'); }
+        box.innerHTML = '<div class="card-flat"><b>✅ ' + esc(r.nama) + '</b><div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">' +
+          '<a class="btn btn-primary btn-sm" href="' + esc(r.url) + '" target="_blank">Buka Spreadsheet ↗</a>' +
+          '<a class="btn btn-ghost btn-sm" href="' + esc(r.urlUnduhXlsx) + '" target="_blank">Unduh Excel (.xlsx) ↓</a></div></div>';
+      }).catch(function(e){ box.innerHTML = ''; toast(e.message, 'err'); });
+    }
+
+    route();
+  </script>
+</body>
+</html>
