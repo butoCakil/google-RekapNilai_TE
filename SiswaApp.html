@@ -36,7 +36,7 @@
       <button data-view="journey">🗺️ Perjalanan</button>
       <button data-view="linimasa">📈 Linimasa Nilai</button>
       <button data-view="notifikasi">🔔 Aktivitas <span id="navBell" class="badge-dot" style="display:none">0</span></button>
-      <button onclick="top.location.href=SCRIPT_URL+'?page=siswa&nis='+encodeURIComponent(SISWA.nis)">📗 Nilai Rapor</button>
+      <button data-view="rapor">📗 Nilai Rapor</button>
       <div class="spacer" style="flex:1"></div>
       <button onclick="keluar()" class="ghost-x">🚪 Keluar</button>
     </div>
@@ -71,6 +71,7 @@
       if(view === 'detail') return renderDetail(parts.slice(1).join('/'));
       if(view === 'linimasa') return renderLinimasa();
       if(view === 'notifikasi') return renderNotifikasi();
+      if(view === 'rapor') return renderRapor();
       return renderJourney();
     }
     $all('#nav button[data-view]').forEach(function(b){
@@ -351,6 +352,43 @@
         }).join('');
         setView(head + '<div class="panel" style="margin-top:18px"><div class="section-title">📈 Nilai di tiap titik tugas</div>' +
           (d.titik.length ? '<div class="journey">' + rows + '</div>' : '<div class="empty">Belum ada tugas.</div>') + '</div>');
+      }).catch(function(e){ setView(errBox(e)); });
+    }
+
+    // ---------- NILAI RAPOR ----------
+    function renderRapor(){
+      loading('Memuat nilai rapor…');
+      grun('getNilaiRaporSiswaToken', TOKEN).then(function(d){
+        if(!d.ok){ return keluar(); }
+        var list = d.nilai || [];
+        var sudah = list.filter(function(n){ return n.status === 'sudah'; });
+        var angka = sudah.map(function(n){ return parseFloat(n.nilaiAkhir); }).filter(function(v){ return !isNaN(v); });
+        var rata = angka.length ? Math.round(angka.reduce(function(a,b){ return a+b; }, 0) / angka.length * 100) / 100 : null;
+
+        var hero = '<div class="hero-xp"><div class="level-badge"><b style="font-size:20px">' + (rata == null ? '–' : rata) + '</b><span>RATA</span></div>' +
+          '<div class="xp-wrap"><strong style="font-size:16px">' + esc(SISWA.nama) + '</strong>' +
+          '<div class="pill-row"><span class="pill">🎓 ' + esc(SISWA.kelas) + '</span>' +
+          '<span class="pill">📚 ' + sudah.length + '/' + list.length + ' mapel dinilai</span></div></div></div>';
+
+        var cards = list.map(function(n){
+          var s = n.status === 'sudah';
+          return '<div class="card"><div class="row-between">' +
+            '<div><span class="tag" style="font-weight:800;color:var(--brand-ink)">' + esc(n.kode) + '</span>' +
+              '<div style="font-weight:700;font-size:13.5px;margin-top:6px;max-width:520px">' + esc(n.mapel) + '</div></div>' +
+            (s ? '<div style="text-align:right"><div style="font-size:26px;font-weight:800;color:var(--brand-ink);line-height:1">' + esc(n.nilaiAkhir) + '</div>' +
+                 '<div class="small muted">nilai akhir</div></div>'
+               : '<span class="st belum">Belum dinilai</span>') + '</div>' +
+            (s ? '<div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:12px">' +
+                  '<div class="small muted">Harian <b style="display:block;font-size:15px;color:var(--ink)">' + esc(n.harian) + '</b>(' + n.bobot.harian + '%)</div>' +
+                  '<div class="small muted">Praktik <b style="display:block;font-size:15px;color:var(--ink)">' + esc(n.praktik) + '</b>(' + n.bobot.praktik + '%)</div>' +
+                  '<div class="small muted">Project <b style="display:block;font-size:15px;color:var(--ink)">' + esc(n.project) + '</b>(' + n.bobot.project + '%)</div>' +
+                 '</div>' + (n.tglInput && n.tglInput !== '-' ? '<div class="small muted" style="margin-top:8px">Diinput: ' + esc(n.tglInput) + '</div>' : '')
+               : '') +
+          '</div>';
+        }).join('');
+
+        setView(hero + '<div class="panel" style="margin-top:18px"><div class="section-title">📋 Rekap Nilai per Mapel</div>' +
+          '<div class="grid" style="gap:12px">' + (cards || '<div class="empty">Belum ada data nilai.</div>') + '</div></div>');
       }).catch(function(e){ setView(errBox(e)); });
     }
 

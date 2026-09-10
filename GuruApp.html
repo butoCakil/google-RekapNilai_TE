@@ -36,7 +36,7 @@
       <button data-view="rekap">📋 Rekap & Koreksi</button>
       <button data-view="pemantauan">🔍 Pemantauan</button>
       <button data-view="unduh">⬇️ Unduh</button>
-      <button onclick="top.location.href=SCRIPT_URL+'?page=dashboard'">📝 Nilai Rapor</button>
+      <button data-view="nilai">📝 Nilai Rapor</button>
       <div style="flex:1"></div>
       <button onclick="keluar()">🚪 Keluar</button>
     </div>
@@ -63,7 +63,7 @@
       var v = location.hash.replace(/^#\/?/, '') || 'ringkasan';
       var view = v.split('/')[0];
       $all('#nav button[data-view]').forEach(function(b){ b.classList.toggle('active', b.dataset.view === view); });
-      ({ ringkasan:renderRingkasan, tugas:renderTugas, rekap:renderRekap, pemantauan:renderPemantauan, unduh:renderUnduh }[view] || renderRingkasan)();
+      ({ ringkasan:renderRingkasan, tugas:renderTugas, rekap:renderRekap, pemantauan:renderPemantauan, unduh:renderUnduh, nilai:renderNilaiRapor }[view] || renderRingkasan)();
     }
     function setView(html){ document.getElementById('view').innerHTML = html; }
     function loading(t){ setView('<div class="loading"><div class="spinner"></div>' + (t || 'Memuat…') + '</div>'); }
@@ -449,6 +449,83 @@
           '<a class="btn btn-primary btn-sm" href="' + esc(r.url) + '" target="_blank">Buka Spreadsheet ↗</a>' +
           '<a class="btn btn-ghost btn-sm" href="' + esc(r.urlUnduhXlsx) + '" target="_blank">Unduh Excel (.xlsx) ↓</a></div></div>';
       }).catch(function(e){ box.innerHTML = ''; toast(e.message, 'err'); });
+    }
+
+    // ============ NILAI RAPOR (modul lama, kini dalam SPA) ============
+    var _mapelRapor = null;
+    function renderNilaiRapor(){
+      loading('Memuat data mapel…');
+      if(!KELAS.length){ grun('getDataKelas').then(function(k){ KELAS = k || []; renderNilaiRapor(); }); return; }
+      grun('getMapelGuru', GURU.nip).then(function(m){
+        _mapelRapor = m;
+        var infoMapel = m
+          ? '<b>' + esc(m.nama) + '</b> <span class="tag">' + esc(m.kode) + '</span>' +
+            '<div class="small muted" style="margin-top:4px">Bobot — Harian ' + m.bobotHarian + '% · Praktik ' + m.bobotPraktik + '% · Project ' + m.bobotProject + '%</div>'
+          : '<span class="muted">Mapel Anda belum dikonfigurasi di sheet Master_Mapel.</span>';
+
+        setView(
+          '<div class="panel"><div class="section-title">📚 Mapel Anda</div><div id="rMapel">' + infoMapel + '</div></div>' +
+          (m ? '<div class="panel" style="margin-top:16px"><div class="section-title">🏫 Pilih Kelas</div>' +
+            '<select class="input" id="rKelas" style="max-width:280px" onchange="muatNilaiKelas(this.value)">' + opsiKelas() + '</select>' +
+            '<div id="rTabel" style="margin-top:16px"><div class="empty small">Pilih kelas untuk mulai input.</div></div></div>' +
+
+            '<div class="panel" style="margin-top:16px"><div class="section-title">⚙️ Bobot Nilai</div>' +
+            '<div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">' +
+              '<div><label class="f">Harian %</label><input class="input" style="width:96px" type="number" id="bH" min="0" max="100" value="' + m.bobotHarian + '"></div>' +
+              '<div><label class="f">Praktik %</label><input class="input" style="width:96px" type="number" id="bP" min="0" max="100" value="' + m.bobotPraktik + '"></div>' +
+              '<div><label class="f">Project %</label><input class="input" style="width:96px" type="number" id="bJ" min="0" max="100" value="' + m.bobotProject + '"></div>' +
+              '<button class="btn btn-primary" onclick="simpanBobotRapor()">Simpan bobot</button>' +
+            '</div><p class="small muted" style="margin-top:8px">Total harus = 100%.</p></div>'
+          : ''));
+      }).catch(function(e){ setView(errBox(e)); });
+    }
+
+    function muatNilaiKelas(kelas){
+      if(!kelas || !_mapelRapor) return;
+      var box = $('#rTabel');
+      box.innerHTML = '<div class="loading"><div class="spinner"></div>Memuat…</div>';
+      grun('getNilaiSiswa', _mapelRapor.kode, kelas).then(function(nilaiList){
+        grun('getDataSiswaByKelas', kelas).then(function(siswa){
+          nilaiList = nilaiList || []; siswa = siswa || [];
+          if(!siswa.length){ box.innerHTML = '<div class="empty small">Tidak ada siswa di kelas ini.</div>'; return; }
+          var rows = siswa.map(function(s, i){
+            var ex = nilaiList.find(function(n){ return String(n.nis) === String(s.nis); });
+            var sudah = !!ex;
+            return '<tr><td>' + (i + 1) + '</td><td>' + esc(s.nis) + '</td><td>' + esc(s.nama) + '</td>' +
+              '<td><input class="mini-grade" type="number" id="h_' + s.nis + '" min="0" max="100" value="' + (sudah ? ex.harian : '') + '" oninput="hitRapor(\'' + s.nis + '\')"></td>' +
+              '<td><input class="mini-grade" type="number" id="p_' + s.nis + '" min="0" max="100" value="' + (sudah ? ex.praktik : '') + '" oninput="hitRapor(\'' + s.nis + '\')"></td>' +
+              '<td><input class="mini-grade" type="number" id="j_' + s.nis + '" min="0" max="100" value="' + (sudah ? ex.project : '') + '" oninput="hitRapor(\'' + s.nis + '\')"></td>' +
+              '<td id="ak_' + s.nis + '" style="font-weight:800">' + (sudah ? ex.nilaiAkhir : '–') + '</td>' +
+              '<td><span class="st ' + (sudah ? 'dinilai' : 'belum') + '">' + (sudah ? 'Sudah' : 'Belum') + '</span></td>' +
+              '<td><button class="btn btn-primary btn-sm" onclick="simpanNilaiRapor(\'' + esc(s.nis) + '\',\'' + esc(s.nama).replace(/'/g,"\\'") + '\',\'' + esc(kelas) + '\')">Simpan</button></td></tr>';
+          }).join('');
+          box.innerHTML = '<div class="tbl-wrap"><table class="tbl"><thead><tr>' +
+            '<th>#</th><th>NIS</th><th>Nama</th><th>Harian</th><th>Praktik</th><th>Project</th><th>Akhir</th><th>Status</th><th></th>' +
+            '</tr></thead><tbody>' + rows + '</tbody></table></div>';
+        });
+      }).catch(function(e){ box.innerHTML = errBox(e); });
+    }
+
+    function hitRapor(nis){
+      var m = _mapelRapor; if(!m) return;
+      var hh = parseFloat($('#h_' + nis).value) || 0, pp = parseFloat($('#p_' + nis).value) || 0, jj = parseFloat($('#j_' + nis).value) || 0;
+      $('#ak_' + nis).textContent = (hh * m.bobotHarian / 100 + pp * m.bobotPraktik / 100 + jj * m.bobotProject / 100).toFixed(2);
+    }
+
+    function simpanNilaiRapor(nis, nama, kelas){
+      grun('simpanNilai', { nis: nis, nama: nama, kelas: kelas,
+        harian: $('#h_' + nis).value, praktik: $('#p_' + nis).value, project: $('#j_' + nis).value })
+      .then(function(r){
+        toast(r.sukses ? 'Nilai ' + nama + ' tersimpan (akhir ' + r.nilaiAkhir + ')' : r.pesan, r.sukses ? 'ok' : 'err');
+        if(r.sukses) muatNilaiKelas($('#rKelas').value);
+      }).catch(function(e){ toast(e.message, 'err'); });
+    }
+
+    function simpanBobotRapor(){
+      grun('updateBobot', $('#bH').value, $('#bP').value, $('#bJ').value).then(function(r){
+        toast(r.sukses ? 'Bobot diperbarui' : r.pesan, r.sukses ? 'ok' : 'err');
+        if(r.sukses) renderNilaiRapor();
+      }).catch(function(e){ toast(e.message, 'err'); });
     }
 
     route();

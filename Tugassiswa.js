@@ -182,3 +182,12 @@ function tandaiSemuaDibacaToken(token) {
   if (!siswa) return { ok: false };
   return tandaiSemuaNotifikasiDibaca(siswa.nis);
 }
+
+// ================================================
+// NILAI RAPOR (modul lama) - dibungkus token untuk dipakai di dalam SPA siswa
+// ================================================
+function getNilaiRaporSiswaToken(token) {
+  const siswa = _siswaDariToken(token);
+  if (!siswa) return { ok: false, pesan: 'Sesi kedaluwarsa' };
+  return { ok: true, siswa: siswa, nilai: getNilaiByNis(siswa.nis) };
+}
